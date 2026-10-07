@@ -30,6 +30,7 @@
 __history/
 __recovery/
 __pycache__/
+compile_commands.json
 
 # build and backup folders
 /_build*
