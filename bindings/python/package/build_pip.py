@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import hashlib
 import re
+import json
 
 from collections import namedtuple
 from argparse import ArgumentParser
@@ -197,6 +198,26 @@ shutil.copy(os.path.join(path_build_pip_source_dir, 'opendaq', '__init__.py'), p
 replace_opendaq_version_stub(os.path.join(path_stage_package, '__init__.py'))
 os.makedirs(os.path.join(path_stage_package, 'opendaq'))
 
+def generate_module_hashes():
+    hash_name = 'sha256'
+    hash_f = lambda data: hashlib.new(hash_name, data).hexdigest()
+    def hash_of(path):
+        with open(path, 'rb') as f:
+            return hash_f(f.read())
+    checksums = {}
+    for m in modules.modules:
+        path = os.path.join(path_stage_package, 'modules', m)
+        entry = {hash_name: hash_of(path), 'vendor' : ''}
+        checksums[os.path.basename(path)] = entry
+    checksums_path = os.path.join(path_stage_package, 'modules', 'module_checksums.json')
+    with open(checksums_path, 'w') as f:
+        json.dump(checksums, f)
+    with open(os.path.join(path_stage_package, '__init__.py'), 'r+') as f:
+        r = f.read() + "\n\nCHECKSUM_FILE_SHA256 = '{}'\n".format(hash_of(checksums_path))
+        f.seek(0)
+        f.write(r)
+
+generate_module_hashes()
 
 def generate_stubs(use_cache):
     stubs_cache_path = os.path.join(build_dir, '..', 'stubs')
