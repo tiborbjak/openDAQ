@@ -21,7 +21,7 @@ class AppContext(object):
 
     default_folders = {'Dev', 'FB', 'IO', 'IP', 'Sig'}
 
-    def __init__(self, params):
+    def __init__(self, params, parent=None):
 
         # logic
         self.nodes = {}
@@ -36,6 +36,8 @@ class AppContext(object):
         self.dpi_factor = self._detect_dpi_factor()
         self.icons = {}
         self.blank_icon = None
+        # user-scoped app files, such as the module allowlist
+        self.config_dir = getattr(params, 'config_dir', None) or self._default_config_dir()
         # daq
         builder = daq.InstanceBuilder()
         builder.scheduler_worker_num = 0
@@ -49,7 +51,7 @@ class AppContext(object):
             builder.module_path = daq.OPENDAQ_MODULES_DIR
             if AppModuleAuthenticator is not None:
                 builder.module_authenticator = daq.FunctionModuleAuthenticator(
-                    daq.Function(AppModuleAuthenticator()))
+                    daq.Function(AppModuleAuthenticator(parent, self)))
                 builder.load_authenticated_modules_only = True
 
         if params.module_path != None:
@@ -81,6 +83,17 @@ class AppContext(object):
                 os.remove(path)
             except OSError:
                 pass
+
+    @staticmethod
+    def _default_config_dir():
+        """The app's directory in the platform's standard per-user config directory."""
+        if platform.system() == 'Windows':
+            config_dir = os.environ.get('APPDATA', os.path.expanduser('~'))
+        elif platform.system() == 'Darwin':
+            config_dir = os.path.expanduser('~/Library/Application Support')
+        else:
+            config_dir = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
+        return os.path.join(config_dir, 'openDAQ')
 
     def _detect_dpi_factor(self) -> float:
         """Detect system DPI scaling factor (1.0 = 96 DPI). Used to scale UI elements on high-DPI displays."""

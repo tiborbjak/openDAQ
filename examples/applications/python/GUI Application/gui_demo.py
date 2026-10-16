@@ -72,6 +72,7 @@ class DisplayType(enum.Enum):
 
 class ContextParams:
     module_path: str = ''
+    config_dir: str = None
     discovery_servers: list = None
 
 class App(tk.Tk):
@@ -97,7 +98,9 @@ class App(tk.Tk):
         else:
             context_params.discovery_servers = []
 
-        self.context = AppContext(context_params)
+        context_params.config_dir = args.config_dir or None
+
+        self.context = AppContext(context_params, self)
         self.event_port = EventPort(self, event_callback=self.on_refresh_event)
         self.tree_search_query = ''
 
@@ -1609,6 +1612,9 @@ if __name__ == '__main__':
         '--config', help='Saved config', type=str, default='')
     parser.add_argument(
         '--module_path', help='Additional modules path', type=str, default='')
+    parser.add_argument(
+        '--config_dir', help='Directory for user-scoped app files '
+        '(default: openDAQ in the platform\'s per-user config directory)', type=str, default='')
     parser.add_argument('-v', '--version', action='version',
         version=f'{os.path.dirname(__file__)} {daq.__dict__.get("__version__", "@VERSION@").replace("@VERSION@", "Unknown version")}')
     parser.add_argument(
