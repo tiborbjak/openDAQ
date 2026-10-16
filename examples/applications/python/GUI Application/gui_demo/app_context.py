@@ -49,7 +49,7 @@ class AppContext(object):
             builder.module_path = '.'
         else:
             builder.module_path = daq.OPENDAQ_MODULES_DIR
-            if AppModuleAuthenticator is not None:
+            if AppModuleAuthenticator is not None and params.module_authentication:
                 builder.module_authenticator = daq.FunctionModuleAuthenticator(
                     daq.Function(AppModuleAuthenticator(parent, self)))
                 builder.load_authenticated_modules_only = True

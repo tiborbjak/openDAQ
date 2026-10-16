@@ -30,6 +30,7 @@ try:
     from gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
     from gui_demo.components.logs_dialog import LogsDialog
     from gui_demo.app_context import AppContext
+    from gui_demo.authenticator import AppModuleAuthenticator
     from gui_demo import utils
     from gui_demo.event_port import EventPort
 except Exception as e:
@@ -41,6 +42,7 @@ except Exception as e:
     from opendaq.gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
     from opendaq.gui_demo.components.logs_dialog import LogsDialog
     from opendaq.gui_demo.app_context import AppContext
+    from opendaq.gui_demo.authenticator import AppModuleAuthenticator
     from opendaq.gui_demo import utils
     from opendaq.gui_demo.event_port import EventPort
 
@@ -73,6 +75,7 @@ class DisplayType(enum.Enum):
 class ContextParams:
     module_path: str = ''
     discovery_servers: list = None
+    module_authentication: bool = True
 
 class App(tk.Tk):
 
@@ -96,6 +99,8 @@ class App(tk.Tk):
             ]
         else:
             context_params.discovery_servers = []
+
+        context_params.module_authentication = getattr(args, 'module_auth', True)
 
         self.context = AppContext(context_params, self)
         self.event_port = EventPort(self, event_callback=self.on_refresh_event)
@@ -1614,6 +1619,13 @@ if __name__ == '__main__':
     parser.add_argument(
         '--discovery_server', help='Discovery server protocols (comma-separated, e.g. "mdns")',
         type=str, default='mdns')
+    if AppModuleAuthenticator is not None:
+        parser.add_argument(
+            '--module_auth', help='Authenticate modules before loading them (default)',
+            dest='module_auth', action='store_true', default=True)
+        parser.add_argument(
+            '--no_module_auth', help='Load modules without authentication',
+            dest='module_auth', action='store_false')
 
     app = App(parser.parse_args())
     app.mainloop()
