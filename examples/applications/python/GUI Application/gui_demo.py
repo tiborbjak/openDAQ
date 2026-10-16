@@ -97,7 +97,7 @@ class App(tk.Tk):
         else:
             context_params.discovery_servers = []
 
-        self.context = AppContext(context_params)
+        self.context = AppContext(context_params, self)
         self.event_port = EventPort(self, event_callback=self.on_refresh_event)
         self.tree_search_query = ''
 

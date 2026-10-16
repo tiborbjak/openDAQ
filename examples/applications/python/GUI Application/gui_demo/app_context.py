@@ -7,6 +7,7 @@ import opendaq as daq
 
 from . import utils
 from .authenticator import AppModuleAuthenticator
+from .vault import Vault
 from typing import Callable, Optional
 
 
@@ -21,7 +22,7 @@ class AppContext(object):
 
     default_folders = {'Dev', 'FB', 'IO', 'IP', 'Sig'}
 
-    def __init__(self, params):
+    def __init__(self, params, parent=None):
 
         # logic
         self.nodes = {}
@@ -36,6 +37,7 @@ class AppContext(object):
         self.dpi_factor = self._detect_dpi_factor()
         self.icons = {}
         self.blank_icon = None
+        self.vault = Vault()
         # daq
         builder = daq.InstanceBuilder()
         builder.scheduler_worker_num = 0
@@ -49,7 +51,7 @@ class AppContext(object):
             builder.module_path = daq.OPENDAQ_MODULES_DIR
             if AppModuleAuthenticator is not None:
                 builder.module_authenticator = daq.FunctionModuleAuthenticator(
-                    daq.Function(AppModuleAuthenticator()))
+                    daq.Function(AppModuleAuthenticator(parent, self)))
                 builder.load_authenticated_modules_only = True
 
         if params.module_path != None:
