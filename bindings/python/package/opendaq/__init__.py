@@ -1,4 +1,5 @@
 from .opendaq import *
+from . import authenticator
 import os
 
 OPENDAQ_MODULES_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,6 +12,8 @@ def Instance(*args):
     if len(args) == 0:
         builder = opendaq.InstanceBuilder()
         builder.module_path = OPENDAQ_MODULES_DIR
+        builder.module_authenticator = FunctionModuleAuthenticator(Function(authenticator.WheelModulesAuthenticator()))
+        builder.load_authenticated_modules_only = True
         return opendaq.InstanceFromBuilder(builder)
     else:
         return opendaq.Instance(*args)
