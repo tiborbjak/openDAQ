@@ -12,6 +12,18 @@ import json
 from collections import namedtuple
 from argparse import ArgumentParser
 
+# import authenticator
+import importlib.util
+def import_from_path(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+authenticator = import_from_path(
+    'authenticator',
+    os.path.join(os.path.dirname(__file__), 'opendaq', 'authenticator.py'))
+
 
 def read_opendaq_version(version_file):
     with open(version_file) as f:
@@ -199,21 +211,20 @@ replace_opendaq_version_stub(os.path.join(path_stage_package, '__init__.py'))
 os.makedirs(os.path.join(path_stage_package, 'opendaq'))
 
 def generate_module_hashes():
-    hash_name = 'sha256'
-    hash_f = lambda data: hashlib.new(hash_name, data).hexdigest()
-    def hash_of(path):
-        with open(path, 'rb') as f:
-            return hash_f(f.read())
+    vendor = None
     checksums = {}
+    wheel_auth = authenticator.WheelModulesAuthenticator
+    hash_of = wheel_auth.hash_of
     for m in modules.modules:
         path = os.path.join(path_stage_package, 'modules', m)
-        entry = {hash_name: hash_of(path), 'vendor' : ''}
+        entry = {wheel_auth.hash_name : hash_of(path), 'vendor' : vendor}
         checksums[os.path.basename(path)] = entry
-    checksums_path = os.path.join(path_stage_package, 'modules', 'module_checksums.json')
+    checksums_path = os.path.join(path_stage_package, wheel_auth.checksums_file_rel_path())
     with open(checksums_path, 'w') as f:
         json.dump(checksums, f)
-    with open(os.path.join(path_stage_package, '__init__.py'), 'r+') as f:
-        r = f.read() + "\n\nCHECKSUM_FILE_SHA256 = '{}'\n".format(hash_of(checksums_path))
+    shutil.copy(os.path.join(path_build_pip_source_dir, 'opendaq', '{}.py'.format(authenticator.__name__)), path_stage_package)
+    with open(os.path.join(path_stage_package, '{}.py'.format(authenticator.__name__)), 'r+') as f:
+        r = f.read() + "\n\n{} = '{}'\n".format(wheel_auth.checksums_hash_var(), hash_of(checksums_path))
         f.seek(0)
         f.write(r)
 
