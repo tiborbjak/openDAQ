@@ -11,6 +11,12 @@ except ImportError:
     WheelModulesAuthenticator = None
 
 
+class ModuleAuth(enum.Enum):
+    NONE = 'none'    # load all modules without authentication
+    WHEEL = 'wheel'  # authenticate the wheel modules, load all other modules
+    ALL = 'all'      # authenticate all modules
+
+
 class ModuleAllowlist:
     """User-scoped list of module hashes the user chose to always load, persisted as JSON:
     a list of {<hash_name>: ..., 'timestamp': ..., 'file': ...} entries, one per allowed file;
@@ -89,6 +95,8 @@ class ModuleAllowlist:
 
 if WheelModulesAuthenticator is not None:
     class AppModuleAuthenticator(WheelModulesAuthenticator):
+        """Authenticates the wheel modules, asking the user about those that fail; loads all other modules."""
+
         def __init__(self, parent, context):
             super().__init__()
             self.parent = parent
@@ -110,11 +118,6 @@ if WheelModulesAuthenticator is not None:
             ret['BinaryValid'] = self.ask_trust(path, hash, 'Module authentication failed', reason)
             return ret
 
-        def auth_nonwheel_module(self, path):
-            return {'BinaryValid': self.ask_trust(
-                path, self.hash_of(path), 'Module not authenticated',
-                'This module is not part of the openDAQ python wheel and has not been authorized:')}
-
         def ask_trust(self, path, module_hash, title, reason):
             """Loads the module if its hash is in the allowlist, otherwise asks the user.
             Answering "Always" adds the module to the allowlist."""
@@ -133,5 +136,24 @@ if WheelModulesAuthenticator is not None:
             if answer == AuthorizeModuleDialog.ALWAYS:
                 self.allowlist.allow(module_hash, path)
             return answer != AuthorizeModuleDialog.NO
+
+    class AllModulesAuthenticator(AppModuleAuthenticator):
+        """Also asks the user about modules outside the wheel that are not in the allowlist."""
+
+        def auth_nonwheel_module(self, path):
+            return {'BinaryValid': self.ask_trust(
+                path, self.hash_of(path), 'Module not authenticated',
+                'This module is not part of the openDAQ python wheel and has not been authorized:')}
 else:
     AppModuleAuthenticator = None
+    AllModulesAuthenticator = None
+
+
+def create_module_authenticator(mode, parent, context):
+    """The authenticator for the mode; None if modules are not authenticated,
+    or if no authenticator is available (not running from the wheel)."""
+    if WheelModulesAuthenticator is None or mode == ModuleAuth.NONE:
+        return None
+    if mode == ModuleAuth.ALL:
+        return AllModulesAuthenticator(parent, context)
+    return AppModuleAuthenticator(parent, context)
