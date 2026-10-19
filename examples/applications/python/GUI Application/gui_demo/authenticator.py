@@ -3,6 +3,7 @@ import enum
 import json
 import os
 import platform
+import sys
 import tempfile
 
 try:
@@ -33,7 +34,14 @@ class ModuleAllowlist:
     def __init__(self, hash_name, path):
         self.hash_name = hash_name
         self.path = path
-        self.entries = self._load()
+        # an unreadable list is not fatal: start empty, and keep the file as a backup on the first save
+        self.backup_on_save = False
+        try:
+            self.entries = self._load()
+        except (OSError, ValueError) as e:
+            print('Reading the module allowlist {} failed, starting with an empty one: {}'.format(self.path, e), file=sys.stderr)
+            self.entries = []
+            self.backup_on_save = True
         self.hashes = {entry[self.hash_name] for entry in self.entries}
 
     def check(self, module_hash, file_path):
@@ -62,6 +70,9 @@ class ModuleAllowlist:
     def save(self):
         directory = os.path.dirname(os.path.abspath(self.path))
         os.makedirs(directory, exist_ok=True)
+        if self.backup_on_save and os.path.exists(self.path):
+            os.replace(self.path, self.path + '.bak')
+        self.backup_on_save = False
         # write to a temp file and swap it in, so a crash never leaves a truncated allowlist
         fd, tmp_path = tempfile.mkstemp(dir=directory, prefix='.module_allowlist-', suffix='.tmp')
         try:
@@ -125,7 +136,7 @@ if WheelModulesAuthenticator is not None:
             if status == ModuleAllowlist.Status.ALLOWED:
                 return True
             if status == ModuleAllowlist.Status.ALLOWED_NEW_FILE:
-                self.allowlist.allow(module_hash, path)
+                self.allow(module_hash, path)
                 return True
             if status == ModuleAllowlist.Status.CHANGED:
                 title = 'Module has been modified'
@@ -134,8 +145,16 @@ if WheelModulesAuthenticator is not None:
             from .components.authorize_module_dialog import AuthorizeModuleDialog
             answer = AuthorizeModuleDialog(self.parent, self.context, path, title, reason).ask()
             if answer == AuthorizeModuleDialog.ALWAYS:
-                self.allowlist.allow(module_hash, path)
+                self.allow(module_hash, path)
             return answer != AuthorizeModuleDialog.NO
+
+        def allow(self, module_hash, path):
+            """Adds the module to the allowlist. A failed save only warns: the module is still
+            allowed for this session, and an exception here would reject it."""
+            try:
+                self.allowlist.allow(module_hash, path)
+            except OSError as e:
+                print('Saving the module allowlist failed:', e, file=sys.stderr)
 
     class AllModulesAuthenticator(AppModuleAuthenticator):
         """Also asks the user about modules outside the wheel that are not in the allowlist."""
