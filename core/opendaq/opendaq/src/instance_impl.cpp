@@ -758,7 +758,7 @@ ErrCode InstanceImpl::getUpdating(Bool* updating)
 
 ErrCode InstanceImpl::getOnEndUpdate(IEvent** event)
 {
-    return rootDevice->endUpdate();
+    return rootDevice->getOnEndUpdate(event);
 }
 
 ErrCode InstanceImpl::getPermissionManager(IPermissionManager** permissionManager)
