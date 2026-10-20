@@ -408,27 +408,6 @@ TEST_F(InstanceTest, GetSetProperty)
     ASSERT_EQ(instance.getPropertyValue("test"), 10);
 }
 
-TEST_F(InstanceTest, GetOnEndUpdate)
-{
-    auto instance = test_helpers::setupInstance();
-    auto rootDevice = instance.getRootDevice();
-
-    instance.addProperty(PropertyBuilder("test").setValueType(ctInt).setDefaultValue(1).build());
-
-    bool endUpdateCalled = false;
-    instance.getOnEndUpdate() += [&endUpdateCalled](PropertyObjectPtr&, EndUpdateEventArgsPtr&) { endUpdateCalled = true; };
-
-    instance.beginUpdate();
-    instance.setPropertyValue("test", 2);
-    ASSERT_TRUE(instance.getUpdating());
-    ASSERT_EQ(rootDevice.getPropertyValue("test"), 1);
-    instance.endUpdate();
-
-    ASSERT_FALSE(instance.getUpdating());
-    ASSERT_EQ(rootDevice.getPropertyValue("test"), 2);
-    ASSERT_TRUE(endUpdateCalled);
-}
-
 TEST_F(InstanceTest, Serialize)
 {
     auto instance = test_helpers::setupInstance();

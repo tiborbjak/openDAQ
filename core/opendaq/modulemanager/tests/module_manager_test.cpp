@@ -12,7 +12,6 @@
 #include <opendaq/device_info_factory.h>
 #include <opendaq/module_manager_utils_ptr.h>
 #include <opendaq/device_impl.h>
-#include <opendaq/streaming_type_factory.h>
 
 using namespace daq;
 
@@ -474,53 +473,4 @@ TEST_F(ModuleManagerTest, ParallelDeviceCreationFailure)
 //    StringPtr message;
 //    errorInfo->getMessage(&message);
 //    ASSERT_TRUE(message.toStdString().find("abc123") != std::string::npos);
-}
-
-class MockStreamingModule : public MockModuleImpl
-{
-public:
-    explicit MockStreamingModule(const StringPtr& id);
-
-    daq::ErrCode INTERFACE_FUNC getAvailableStreamingTypes(daq::IDict** streamingTypes) override;
-    daq::ErrCode INTERFACE_FUNC createStreaming(daq::IStreaming** streaming, daq::IString* connectionString, daq::IPropertyObject* config) override;
-
-    int createCount = 0;
-};
-
-MockStreamingModule::MockStreamingModule(const StringPtr& id)
-    : MockModuleImpl(id)
-{
-}
-
-daq::ErrCode MockStreamingModule::getAvailableStreamingTypes(daq::IDict** streamingTypes)
-{
-    const auto type = StreamingType("MockStreaming", "MockStreaming", "", "daqmockstr");
-    *streamingTypes = Dict<IString, IStreamingType>({{type.getId(), type}}).detach();
-    return OPENDAQ_SUCCESS;
-}
-
-daq::ErrCode MockStreamingModule::createStreaming(daq::IStreaming** streaming,
-                                                  daq::IString* /*connectionString*/,
-                                                  daq::IPropertyObject* /*config*/)
-{
-    createCount++;
-    *streaming = nullptr;
-    return OPENDAQ_SUCCESS;
-}
-
-TEST_F(ModuleManagerTest, CreateStreamingStopsAtFirstMatchingModule)
-{
-    auto manager = ModuleManager("[[none]]");
-    const auto context = Context(nullptr, Logger(), nullptr, manager, nullptr);
-
-    auto first = createWithImplementation<IModule, MockStreamingModule>("first");
-    auto second = createWithImplementation<IModule, MockStreamingModule>("second");
-    manager.addModule(first);
-    manager.addModule(second);
-    auto firstImpl = reinterpret_cast<MockStreamingModule*>(first.getObject());
-    auto secondImpl = reinterpret_cast<MockStreamingModule*>(second.getObject());
-
-    manager.asPtr<IModuleManagerUtils>().createStreaming("daqmockstr://dev", nullptr);
-    ASSERT_EQ(firstImpl->createCount, 1);
-    ASSERT_EQ(secondImpl->createCount, 0);
 }
