@@ -976,10 +976,8 @@ ErrCode GenericPropertyObjectImpl<PropObjInterface, Interfaces...>::checkContain
     if (coreType == ctObject)
     {
         auto inspect = value.asPtrOrNull<IInspectable>(true);
-        if (inspect.assigned() && !inspect.getInterfaceIds().empty())
-        {
-            return inspect.getInterfaceIds()[0] == IPropertyObject::Id;
-        }
+        if (inspect.assigned() && !inspect.getInterfaceIds().empty() && inspect.getInterfaceIds()[0] == IPropertyObject::Id)
+            return OPENDAQ_SUCCESS;
 
         return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDTYPE, "Only base Property Object object-type values are allowed");
     }

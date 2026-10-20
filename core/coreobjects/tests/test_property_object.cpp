@@ -2337,6 +2337,14 @@ TEST_F(PropertyObjectTest, BeginEndUpdateClonedClear)
     ASSERT_EQ(propObj.getPropertyValue("Child.NewInt"), 15);
 }
 
+TEST_F(PropertyObjectTest, SetProtectedObjectValueRejectsNonPropertyObject)
+{
+    const auto propObj = PropertyObject();
+    propObj.addProperty(ObjectProperty("Child", PropertyObject()));
+
+    ASSERT_THROW(propObj.asPtr<IPropertyObjectProtected>().setProtectedPropertyValue("Child", IntProperty("Int", 0)), InvalidTypeException);
+}
+
 TEST_F(PropertyObjectTest, BeginEndUpdateClonedClassObject)
 {
     const auto propObj = PropertyObject(objManager, "NestedObjectClass");
