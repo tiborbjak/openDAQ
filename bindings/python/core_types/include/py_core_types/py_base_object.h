@@ -20,13 +20,15 @@
 
 #include <pybind11/pybind11.h>
 
+#include "py_core_types/py_deferred_dec_ref.h"
+
 DECLARE_OPENDAQ_INTERFACE(IPyObject, daq::IBaseObject)
 {
     virtual daq::ErrCode INTERFACE_FUNC getPyObject(pybind11::object & pyObj) = 0;
 };
 
 template <class PyT, class... Interfaces>
-class PyObjectImpl : public daq::ImplementationOf<IPyObject, Interfaces...>
+class PyObjectImpl: public daq::ImplementationOf<IPyObject, Interfaces...>
 {
 public:
     explicit PyObjectImpl(const PyT& pyObject);
@@ -66,9 +68,16 @@ PyObjectImpl<PyT, Interfaces...>::~PyObjectImpl()
         return;
     }
 
-    // Release the handle under the GIL; assigning PyT() would allocate (e.g. pybind11::list)
-    pybind11::gil_scoped_acquire gil;
-    pyObject.release().dec_ref();
+    // Release the handle; assigning PyT() would allocate (e.g. pybind11::list)
+    if (PyGILState_Check())
+    {
+        pyObject.release().dec_ref();
+        deferredDecRefs().drain();
+        return;
+    }
+
+    // Waiting for the GIL could deadlock, as its holder may be waiting for this thread
+    deferredDecRefs().defer(pyObject.release());
 }
 
 template <class PyT, class... Interfaces>

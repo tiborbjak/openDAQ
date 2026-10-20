@@ -54,6 +54,7 @@ class TestGil(opendaq_test.TestCase):
     def test_wrapped_py_function_released_on_worker_thread(self):
         out = self.run_scenario('''
             import threading
+            import time
 
             scheduler = opendaq.Scheduler(opendaq.Logger(opendaq.List(), opendaq.LogLevel.Info), 1)
             references_dropped = threading.Event()
@@ -72,12 +73,43 @@ class TestGil(opendaq_test.TestCase):
 
             awaitable = scheduler.schedule_function(opendaq.Function(Callback()))
             references_dropped.set()
-            # The worker can drop the task after wait_all returns, so wait for the release itself
+            # The worker can drop the task after wait_all returns, so wait for the release itself.
+            # Poll, as the deferred release runs only while the main thread executes bytecode.
             scheduler.wait_all()
-            if freed.wait(10):
+            deadline = time.monotonic() + 10
+            while not freed.is_set() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            if freed.is_set():
                 print('freed on main thread' if freed_on_main else 'freed on worker thread')
         ''')
-        self.assertIn('freed on worker thread', out)
+        self.assertIn('freed on main thread', out)
+
+    def test_deferred_release_drained_while_main_thread_blocked(self):
+        out = self.run_scenario('''
+            import threading
+
+            scheduler = opendaq.Scheduler(opendaq.Logger(opendaq.List(), opendaq.LogLevel.Info), 1)
+            references_dropped = threading.Event()
+            freed = threading.Event()
+
+            class Callback:
+                def __call__(self):
+                    references_dropped.wait()
+
+                def __del__(self):
+                    freed.set()
+
+            class Drainer:
+                def __call__(self):
+                    pass
+
+            first = scheduler.schedule_function(opendaq.Function(Callback()))
+            second = scheduler.schedule_function(opendaq.Function(Drainer()))
+            references_dropped.set()
+            # Blocking keeps the pending call from running, so calling the second task must drain the first
+            print('freed' if freed.wait(10) else 'still deferred')
+        ''')
+        self.assertIn('freed', out)
 
     def test_scheduler_released_while_worker_releases_py_function(self):
         out = self.run_scenario('''

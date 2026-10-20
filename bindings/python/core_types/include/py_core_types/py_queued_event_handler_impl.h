@@ -50,7 +50,7 @@ daq::ErrCode PyQueuedEventHandlerImpl<F>::handleEvent(daq::IBaseObject* sender, 
 template <class F>
 daq::ErrCode PyQueuedEventHandlerImpl<F>::dispatch(daq::IBaseObject* sender, daq::IEventArgs* eventArgs)
 {
-    pybind11::gil_scoped_acquire gil;
+    GilAcquireAndDrain gil;
     auto senderObj = baseObjectToPyObject(sender);
     auto eventArgsObj = baseObjectToPyObject(eventArgs);
     auto args = pybind11::make_tuple(senderObj, eventArgsObj);

@@ -58,7 +58,7 @@ daq::ErrCode PyFunctionImpl<F>::call(daq::IBaseObject* params, daq::IBaseObject*
 {
     OPENDAQ_PARAM_NOT_NULL(result);
 
-    py::gil_scoped_acquire acquire;
+    GilAcquireAndDrain acquire;
     
     if (params == nullptr)
     {
