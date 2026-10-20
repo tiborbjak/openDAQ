@@ -279,6 +279,17 @@ TEST_F(DeviceTest, DeviceTypeStructNames)
     ASSERT_EQ(structType.getFieldNames(), structPtr.getFieldNames());
 }
 
+TEST_F(DeviceTest, DeviceTypeSerialize)
+{
+    const daq::DeviceTypePtr deviceType = daq::DeviceType("id", "name", nullptr, "prefix");
+
+    const auto serializer = daq::JsonSerializer();
+    deviceType.serialize(serializer);
+
+    const daq::DeviceTypePtr deserialized = daq::JsonDeserializer().deserialize(serializer.getOutput(), nullptr, nullptr);
+    ASSERT_EQ(deserialized, deviceType);
+}
+
 TEST_F(DeviceTest, StandardProperties)
 {
     const auto name = "foo";

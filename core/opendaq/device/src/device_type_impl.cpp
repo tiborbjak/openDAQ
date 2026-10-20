@@ -56,7 +56,7 @@ ErrCode INTERFACE_FUNC DeviceTypeImpl::serialize(ISerializer* serializer)
                 serializerPtr.writeString(description);
             }
 
-            if (description.assigned())
+            if (prefix.assigned())
             {
                 serializerPtr.key("prefix");
                 serializerPtr.writeString(prefix);
