@@ -1594,6 +1594,8 @@ StreamingPtr ModuleManagerImpl::onCreateStreaming(const StringPtr& connectionStr
             LOG_E("{}: createStreaming failed: {}", module.getModuleInfo().getName(), e.what())
             throw;
         }
+
+        break;
     }
 
     return streaming;
