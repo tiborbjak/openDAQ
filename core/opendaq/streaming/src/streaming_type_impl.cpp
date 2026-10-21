@@ -4,12 +4,12 @@
 BEGIN_NAMESPACE_OPENDAQ
 
 StreamingTypeImpl::StreamingTypeImpl(const StringPtr& id,
-                                            const StringPtr& name,
-                                            const StringPtr& description,
-                                            const StringPtr& prefix,
-                                            const PropertyObjectPtr& defaultConfig,
-                                            const DictPtr<IString, IAuthenticationMethod>& supportedAuthenticationMethods,
-                                            const DeviceTypePtr& linkedDeviceType)
+                                     const StringPtr& name,
+                                     const StringPtr& description,
+                                     const StringPtr& prefix,
+                                     const PropertyObjectPtr& defaultConfig,
+                                     const DictPtr<IString, IAuthenticationMethod>& supportedAuthenticationMethods,
+                                     const DeviceTypePtr& linkedDeviceType)
     : Super(StreamingTypeStructType(), id, name, description, prefix, defaultConfig, supportedAuthenticationMethods)
     , linkedDeviceType(linkedDeviceType)
 {
@@ -187,10 +187,9 @@ ErrCode StreamingTypeImpl::Deserialize(ISerializedObject* serialized, IBaseObjec
         auto streamingType = createWithImplementation<IStreamingType, StreamingTypeImpl>(
             id, name, description, prefix, defaultConfig, supportedAuthenticationMethods, linkedDeviceType);
 
-        ModuleInfoPtr moduleInfo;
         if (serializedObj.hasKey("moduleInfo"))
         {
-            moduleInfo = serializedObj.readObject("moduleInfo", contextPtr, factoryCallbackPtr);
+            const ModuleInfoPtr moduleInfo = serializedObj.readObject("moduleInfo", contextPtr, factoryCallbackPtr);
             streamingType.asPtr<IComponentTypePrivate>()->setModuleInfo(moduleInfo);
         }
 
