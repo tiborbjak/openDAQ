@@ -153,6 +153,27 @@ class TestGil(opendaq_test.TestCase):
         ''')
         self.assertIn('completed', out)
 
+    def test_wrapped_py_object_released_while_gil_holder_waits_for_lock(self):
+        out = self.run_scenario('''
+            import time
+            import weakref
+            import opendaq_test_helpers
+
+            obj = Foo()
+            ref = weakref.ref(obj)
+            # A worker releases the wrapper while holding a lock that this thread waits for with the GIL held
+            opendaq_test_helpers.release_wrapped_object_while_gil_holder_waits(obj)
+            print('completed')
+
+            # The release was deferred to a pending call, which runs while the main thread executes bytecode
+            del obj
+            deadline = time.monotonic() + 10
+            while ref() is not None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            print('freed' if ref() is None else 'still deferred')
+        ''')
+        self.assertIn('completed', out)
+        self.assertIn('freed', out)
 
 if __name__ == '__main__':
     unittest.main()

@@ -19,6 +19,28 @@ set(PYHTON_TEST_SRC
     test_type_manager.py
 )
 
+# Test-only module, imported by the tests from the module's output directory
+pybind11_add_module(opendaq_test_helpers
+    MODULE
+        helpers/opendaq_test_helpers.cpp
+)
+
+target_link_libraries(opendaq_test_helpers
+    PRIVATE
+        daq::py_core_types
+)
+
+set_target_properties(opendaq_test_helpers
+    PROPERTIES
+        DEBUG_POSTFIX ""
+)
+
+if(UNIX AND NOT APPLE)
+    set_target_properties(opendaq_test_helpers PROPERTIES
+        BUILD_RPATH_USE_ORIGIN TRUE
+    )
+endif()
+
 option(OPENDAQ_VENV_PYTHON_EXECUTABLE_TESTS "Use python executable from virtual environment for tests" OFF)
 set(PYTHON_EXECUTABLE ${Python_EXECUTABLE})
 
