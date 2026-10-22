@@ -1,0 +1,34 @@
+# Local formatting hooks. Setup (once per clone), with either runner:
+#   pip install pre-commit && pre-commit install
+#   pip install prek && prek install    (faster drop-in replacement)
+# See AGENTS.md for the conventions these hooks cannot check.
+
+# Third-party and generated code is never reformatted
+exclude: |
+  (?x)^(
+    external/.*|
+    .*/external/.*|
+    bindings/c/.*|
+    bindings/python/.*/generated/.*|
+    shared/tools/RTGen/.*
+  )$
+
+repos:
+  - repo: local
+    hooks:
+      # Formats only the staged lines, so untouched legacy code keeps its layout.
+      # Files indented with tabs keep tabs. clang-format is pinned: different
+      # major versions format differently.
+      - id: clang-format-changed-lines
+        name: clang-format (changed lines)
+        language: python
+        additional_dependencies: [clang-format==21.1.8]
+        entry: python shared/tools/pre-commit/clang_format_changed.py
+        types_or: [c, c++]
+        require_serial: true
+
+      - id: check-new-files
+        name: license header and pragma once (new files)
+        language: python
+        entry: python shared/tools/pre-commit/check_new_files.py
+        types_or: [c, c++, c#]

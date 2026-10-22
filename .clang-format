@@ -1,61 +1,118 @@
 ﻿---
-BasedOnStyle: Chromium
-AccessModifierOffset: -4
-AlignAfterOpenBracket: Align
-#AllowAllArgumentsOnNextLine: 'false'
-#AlignConsecutiveAssignments: None
-#AlignConsecutiveDeclarations: None
-AlignEscapedNewlines: Left
-AlignOperands: true
-AllowAllParametersOfDeclarationOnNextLine: true
-#AllowShortBlocksOnASingleLine: Never
-AllowShortCaseLabelsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
-AlwaysBreakAfterReturnType: None
-AlwaysBreakBeforeMultilineStrings: false
-#AlwaysBreakTemplateDeclarations: Yes
-BinPackArguments: false
-BinPackParameters: false
-BreakBeforeBinaryOperators: None
-BreakBeforeBraces: Allman
-BreakBeforeTernaryOperators: true
-BreakConstructorInitializersBeforeComma: true
-ColumnLimit: 140
-CommentPragmas: '^ IWYU pragma:'
-ConstructorInitializerAllOnOneLineOrOnePerLine: false
-ConstructorInitializerIndentWidth: 4
-ContinuationIndentWidth: 4
-IndentCaseLabels: true
-IndentWidth: 4
-KeepEmptyLinesAtTheStartOfBlocks: false
+# openDAQ C++ formatting. Pinned to clang-format 21.1.8 (see .pre-commit-config.yaml);
+# other major versions produce slightly different output.
+# Options were chosen to match code written since late 2025; see AGENTS.md for
+# conventions clang-format cannot express.
 Language: Cpp
-MaxEmptyLinesToKeep: 1
+BasedOnStyle: Chromium
+Standard: Auto
+
+# Layout
+ColumnLimit: 140
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+AccessModifierOffset: -4
+IndentCaseLabels: true
 NamespaceIndentation: None
-ObjCBlockIndentWidth: 4
+FixNamespaceComments: false
+MaxEmptyLinesToKeep: 1
+KeepEmptyLines:
+  AtStartOfBlock: false
+
+# Braces: Allman everywhere, lambda bodies indented relative to the enclosing statement:
+#   daqTry([&]
+#   {
+#       ...
+#   });
+BreakBeforeBraces: Allman
+LambdaBodyIndentation: OuterScope
+InsertBraces: false
+
+# Short constructs
+AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+
+# Wrapping
+AlignAfterOpenBracket: Align
+BinPackArguments: false
+BinPackParameters: OnePerLine
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: BinPack
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+BreakTemplateDeclarations: Yes
+BreakStringLiterals: false
+AlwaysBreakBeforeMultilineStrings: false
+AlignEscapedNewlines: Left
+AlignOperands: Align
 PenaltyBreakBeforeFirstCallParameter: 1
 PenaltyBreakComment: 300
 PenaltyBreakFirstLessLess: 120
 PenaltyBreakString: 1000
 PenaltyExcessCharacter: 1000000
 PenaltyReturnTypeOnItsOwnLine: 200
+
+# Spacing
 PointerAlignment: Left
-#SortIncludes: Never
+DerivePointerAlignment: false
 SpaceAfterCStyleCast: true
-SpaceBeforeAssignmentOperators: true
 SpaceBeforeParens: ControlStatements
 SpacesBeforeTrailingComments: 2
-Standard: Auto
-TabWidth: 4
-UseTab: Never
-#NamespaceMacros:
-#  - DECLARE_TEMPLATED_OPENDAQ_INTERFACE_T
-#  - DECLARE_TEMPLATED_OPENDAQ_INTERFACE_T_U
-#  - DECLARE_OPENDAQ_INTERFACE
-FixNamespaceComments: false
-#MacroBlockBegin: "^BEGIN_NAMESPACE_OPENDAQ$"
-#MacroBlockEnd: "^END_NAMESPACE_OPENDAQ"
-#IndentPPDirectives: BeforeHash
-#SeparateDefinitionBlocks: Always
+
+# Comments: fix indentation, never re-wrap long comments
+ReflowComments: IndentOnly
+CommentPragmas: '^ IWYU pragma:'
+
+# Include order is meaningful in places (platform headers); keep as written
+SortIncludes:
+  Enabled: false
+IncludeBlocks: Preserve
+
+# Interface declaration macros expand to `struct Name : public Base`. Without this,
+# clang-format parses the interface body as a function and emits `IString * *name`.
+Macros:
+  - 'DECLARE_OPENDAQ_INTERFACE(name, base)=struct name : public base'
+  - 'DECLARE_OPENDAQ_INTERFACE_EX(name, base)=struct name : public base'
+  - 'DECLARE_OPENDAQ_CUSTOM_INTERFACE(name, base, ns)=struct name : public base'
+  - 'DECLARE_TEMPLATED_OPENDAQ_INTERFACE_T(name, base)=template <typename T> struct name : public base'
+  - 'DECLARE_TEMPLATED_OPENDAQ_INTERFACE_T_U(name, base)=template <typename T, typename U> struct name : public base'
+
+# Argument lists of these macros are (type, name) pairs or gmock signatures that
+# clang-format would mangle; they are left exactly as written.
+WhitespaceSensitiveMacros:
+  - MOCK_METHOD
+  - OPENDAQ_DECLARE_CLASS_FACTORY
+  - OPENDAQ_DECLARE_CLASS_FACTORY_FUNC_WITH_INTERFACE
+  - OPENDAQ_DECLARE_CLASS_FACTORY_WITH_INTERFACE
+  - OPENDAQ_DECLARE_CLASS_FACTORY_WITH_INTERFACE_AND_CREATEFUNC
+  - OPENDAQ_DECLARE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T
+  - OPENDAQ_DECLARE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T_U
+  - OPENDAQ_DECLARE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T_U_ZERO
+  - OPENDAQ_DEFINE_CLASS_FACTORY
+  - OPENDAQ_DEFINE_CLASS_FACTORY_HELPER_WITH_INTERFACE_AND_CREATEFUNC
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_AND_CREATEFUNC
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_AND_CREATEFUNC_OBJ
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_AND_CREATEFUNC_OBJ_PAR
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_AND_CREATEFUNC_OBJ_TEMPLATE
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_IMPL_T
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_IMPL_T_U
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T_U
+  - OPENDAQ_DEFINE_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T_U_ZERO
+  - OPENDAQ_DEFINE_CLASS_INTERFACE_FACTORY
+  - OPENDAQ_DEFINE_CLASS_SINGLETON_FACTORY
+  - OPENDAQ_DEFINE_CUSTOM_CLASS_FACTORY_WITH_INTERFACE_AND_CREATEFUNC_OBJ
+  - OPENDAQ_DEFINE_CUSTOM_CLASS_FACTORY_WITH_INTERFACE_AND_CREATEFUNC_OBJ_PAR
+  - OPENDAQ_DEFINE_CUSTOM_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T
+  - OPENDAQ_DEFINE_CUSTOM_CLASS_FACTORY_WITH_INTERFACE_TEMPLATE_T_U
 ...
