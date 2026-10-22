@@ -11,6 +11,8 @@
 #include <opendaq/device_info_config_ptr.h>
 #include <opendaq/device_info_factory.h>
 #include <opendaq/module_manager_utils_ptr.h>
+#include <opendaq/add_streaming_options_ptr.h>
+#include <opendaq/device_info_internal_ptr.h>
 #include <opendaq/device_impl.h>
 #include <opendaq/module_manager_errors.h>
 #include <coreobjects/property_factory.h>
@@ -502,9 +504,9 @@ public:
         return OPENDAQ_SUCCESS;
     }
 
-    void addDeviceType(const StringPtr& id, const PropertyObjectPtr& config)
+    void addDeviceType(const StringPtr& id, const PropertyObjectPtr& config, DeviceKind kind = DeviceKind::External)
     {
-        auto builder = DeviceTypeBuilder().setId(id).setName(id).setConnectionStringPrefix(id);
+        auto builder = DeviceTypeBuilder().setId(id).setName(id).setConnectionStringPrefix(id).setDeviceKind(kind);
         if (config.assigned())
             builder.setDefaultConfig(config);
         deviceTypes.set(id, builder.build());
@@ -697,4 +699,181 @@ TEST_F(ModuleManagerLinkTest, OneBadLinkRejectsModule)
     impl->addStreamingType("bad", "other", streamingConfig());
 
     expectContains(tryAdd(lib.module), R"(streaming type "bad")");
+}
+
+class ModuleManagerAddConfigTest : public ModuleManagerLinkTest
+{
+protected:
+    ModuleManagerAddConfigTest()
+    {
+        auto lib = makeModule("add_config");
+        lib.impl->addDeviceType("mockdev", nullptr, DeviceKind::Mirrored);
+        lib.impl->addDeviceType("extdev", nullptr, DeviceKind::External);
+        lib.impl->addDeviceType("unlinked", nullptr, DeviceKind::Mirrored);
+        lib.impl->addStreamingType("mockstr", "mockdev", nullptr);
+        lib.impl->addStreamingType("free", nullptr, nullptr);
+        manager->addModule(lib.module);
+    }
+
+    static DeviceInfoConfigPtr Info(const std::string& connectionString,
+                                    const std::vector<std::pair<std::string, ProtocolType>>& capabilities = {})
+    {
+        auto info = DeviceInfo(connectionString);
+        for (size_t i = 0; i < capabilities.size(); ++i)
+        {
+            const auto& [prefix, type] = capabilities[i];
+            const auto id = prefix + std::to_string(i);
+            info.asPtr<IDeviceInfoInternal>().addServerCapability(ServerCapability(id, id, type).setPrefix(prefix));
+        }
+        return info;
+    }
+
+    ErrCode create(const DeviceInfoPtr& info, const StringPtr& prefix, AddDeviceConfigPtr& config)
+    {
+        IAddDeviceConfig* raw = nullptr;
+        const ErrCode errCode = manager.asPtr<IModuleManagerUtils>()->createAddDeviceConfig(&raw, info, prefix);
+        config = AddDeviceConfigPtr::Adopt(raw);
+        daqClearErrorInfo();
+        return errCode;
+    }
+
+    AddDeviceConfigPtr create(const DeviceInfoPtr& info, const StringPtr& prefix = nullptr)
+    {
+        AddDeviceConfigPtr config;
+        EXPECT_EQ(create(info, prefix, config), OPENDAQ_SUCCESS);
+        return config;
+    }
+
+    static std::vector<std::string> listed(const AddDeviceConfigPtr& config)
+    {
+        std::vector<std::string> ids;
+        for (const auto& [id, _] : config.getStreamingOptions().getStreamingConfigs())
+            ids.push_back(id);
+        return ids;
+    }
+
+    static std::string selected(const AddDeviceConfigPtr& config)
+    {
+        const auto streamingConfig = config.getStreamingOptions().getStreamingConfig();
+        return streamingConfig.assigned() ? streamingConfig.getStreamingType().getId().toStdString() : "";
+    }
+};
+
+using Caps = std::vector<std::pair<std::string, ProtocolType>>;
+using Strs = std::vector<std::string>;
+
+TEST_F(ModuleManagerAddConfigTest, DiscoveredDeviceType)
+{
+    const auto cfg = ProtocolType::Configuration;
+    const auto both = ProtocolType::ConfigurationAndStreaming;
+
+    struct Row
+    {
+        Caps caps;
+        std::string expectedDevice;
+    };
+
+    const std::vector<Row> rows = {
+        {{{"extdev", cfg}, {"mockdev", both}}, "mockdev"},
+        {{{"mockdev", cfg}, {"extdev", both}}, "extdev"},
+        {{{"mockdev", cfg}, {"extdev", cfg}}, "mockdev"},
+        {{{"extdev", cfg}, {"mockdev", cfg}}, "extdev"},
+        {{{"unloaded", both}, {"extdev", cfg}}, "extdev"},
+    };
+
+    for (const auto& row : rows)
+        ASSERT_EQ(create(Info("daq://x", row.caps)).getDeviceType().getId(), row.expectedDevice);
+
+    AddDeviceConfigPtr config;
+    ASSERT_EQ(create(Info("daq://x", {{"unloaded", both}}), nullptr, config), OPENDAQ_ERR_NOTFOUND);
+}
+
+TEST_F(ModuleManagerAddConfigTest, DiscoveredExplicitPrefix)
+{
+    const auto info = Info(
+        "daq://x",
+        {{"mockdev", ProtocolType::Configuration}, {"extdev", ProtocolType::Configuration}, {"unloaded", ProtocolType::Configuration}});
+
+    ASSERT_EQ(create(info, "extdev").getDeviceType().getId(), "extdev");
+
+    AddDeviceConfigPtr config;
+    ASSERT_EQ(create(info, "free", config), OPENDAQ_ERR_NOTFOUND);
+    ASSERT_EQ(create(info, "unloaded", config), OPENDAQ_ERR_NOTFOUND);
+    ASSERT_EQ(create(Info("daq://x", {{"mockdev", ProtocolType::Configuration}}), "extdev", config), OPENDAQ_ERR_NOTFOUND);
+}
+
+TEST_F(ModuleManagerAddConfigTest, DiscoveredStreamingTypes)
+{
+    const auto cfg = ProtocolType::Configuration;
+    const auto streaming = ProtocolType::Streaming;
+    const auto both = ProtocolType::ConfigurationAndStreaming;
+
+    struct Row
+    {
+        Caps caps;
+        Strs expectedListed;
+        std::string expectedSelected;
+    };
+
+    const std::vector<Row> rows = {
+        // only streaming capabilities with a loaded type are listed, in capability order
+        {{{"mockdev", cfg}, {"free", streaming}, {"mockstr", both}, {"unloaded", streaming}}, {"free", "mockstr"}, "mockstr"},
+        // no linked type listed: the first listed one is selected
+        {{{"mockdev", cfg}, {"free", streaming}}, {"free"}, "free"},
+        {{{"mockdev", cfg}, {"free", streaming}, {"free", both}}, {"free"}, "free"},
+        {{{"mockdev", cfg}}, {}, ""},
+    };
+
+    for (const auto& row : rows)
+    {
+        const auto config = create(Info("daq://x", row.caps), "mockdev");
+        ASSERT_EQ(listed(config), row.expectedListed);
+        ASSERT_EQ(selected(config), row.expectedSelected);
+    }
+}
+
+TEST_F(ModuleManagerAddConfigTest, ConnectionStringOnly)
+{
+    const auto bare = create(Info("mockdev://"));
+    ASSERT_EQ(bare.getDeviceType().getId(), "mockdev");
+    ASSERT_EQ(listed(bare), (Strs{"mockstr", "free"}));
+    ASSERT_EQ(selected(bare), "mockstr");
+
+    const auto withHost = create(Info("mockdev://192.168.0.1"), "mockdev");
+    ASSERT_EQ(withHost.getDeviceType().getId(), "mockdev");
+
+    const auto unlinked = create(Info("unlinked://"));
+    ASSERT_EQ(listed(unlinked), (Strs{"mockstr", "free"}));
+    ASSERT_EQ(selected(unlinked), "");
+
+    AddDeviceConfigPtr config;
+    ASSERT_EQ(create(Info("mockdev://"), "extdev", config), OPENDAQ_ERR_INVALIDPARAMETER);
+    ASSERT_EQ(create(Info("unloaded://"), nullptr, config), OPENDAQ_ERR_NOTFOUND);
+}
+
+TEST_F(ModuleManagerAddConfigTest, ScanOnAddSeededFromModuleManager)
+{
+    ASSERT_TRUE(create(Info("mockdev://")).getScanOnAdd());
+
+    auto disabled = ModuleManager("[[none]]");
+    auto options = Dict<IString, IBaseObject>({{"ModuleManager", Dict<IString, IBaseObject>({{"ScanOnAdd", False}})}});
+    const auto context = Context(nullptr, Logger(), nullptr, disabled, nullptr, options);
+
+    auto lib = makeModule();
+    lib.impl->addDeviceType("mockdev", nullptr);
+    ASSERT_EQ(disabled->addModule(lib.module), OPENDAQ_SUCCESS);
+
+    ASSERT_FALSE(disabled.asPtr<IModuleManagerUtils>().createAddDeviceConfig(Info("mockdev://")).getScanOnAdd());
+}
+
+TEST_F(ModuleManagerAddConfigTest, CreateAddStreamingConfig)
+{
+    const auto utils = manager.asPtr<IModuleManagerUtils>();
+
+    ASSERT_EQ(utils.createAddStreamingConfig("free://").getStreamingType().getId(), "free");
+    ASSERT_EQ(utils.createAddStreamingConfig("mockstr://host").getStreamingType().getId(), "mockstr");
+
+    IAddStreamingConfig* raw = nullptr;
+    ASSERT_EQ(utils->createAddStreamingConfig(&raw, String("unloaded://")), OPENDAQ_ERR_NOTFOUND);
+    daqClearErrorInfo();
 }

@@ -16,6 +16,8 @@
 
 #pragma once
 #include <opendaq/module.h>
+#include <opendaq/add_device_config.h>
+#include <opendaq/add_streaming_config.h>
 
 BEGIN_NAMESPACE_OPENDAQ
 
@@ -115,6 +117,12 @@ DECLARE_OPENDAQ_INTERFACE(IModuleManagerUtils, IBaseObject)
     // [templateType(streamingTypes, IString, IStreamingType)]
     virtual ErrCode INTERFACE_FUNC getAvailableStreamingTypes(IDict** streamingTypes) = 0;
 
+    /*!
+     * @brief Creates an add-device config with the default settings of all available Device and Streaming types.
+     * @param[out] defaultConfig The default config
+     *
+     * @deprecated Use createAddDeviceConfig instead.
+     */
     virtual ErrCode INTERFACE_FUNC createDefaultAddDeviceConfig(IPropertyObject** defaultConfig) = 0;
 
     /*!
@@ -203,6 +211,36 @@ DECLARE_OPENDAQ_INTERFACE(IModuleManagerUtils, IBaseObject)
      * This method searches through the available devices discovered during the last scan.
      */
     virtual ErrCode INTERFACE_FUNC getDiscoveryInfo(IDeviceInfo** deviceInfo, IString* manufacturer, IString* serialNumber) = 0;
+
+    /*!
+     * @brief Creates a config for adding the device described by the device info.
+     * @param[out] config The add device config
+     * @param info The device info, discovered or holding only a connection string
+     * @param prefix The connection string prefix of the Device type to use
+     *
+     * A discovered info has server capabilities.
+     * Without a prefix, the Device type of the highest-priority capability with a loaded Device type is used.
+     * With a prefix, it must be the prefix of one of the info's capabilities.
+     * The listed Streaming types are those of the info's streaming capabilities that have a loaded Streaming type.
+     * An info without server capabilities uses the prefix of its connection string, and lists all loaded Streaming types.
+     * The Streaming type linked to the Device type is selected.
+     * Otherwise the first listed Streaming type is selected for a discovered info, and none for any other.
+     * ScanOnAdd is initialized from the module manager.
+     *
+     * Fails with OPENDAQ_ERR_NOTFOUND when no loaded Device type has the prefix.
+     * Fails with OPENDAQ_ERR_NOTFOUND when a discovered info has no capability with the prefix.
+     * Fails with OPENDAQ_ERR_INVALIDPARAMETER when the prefix differs from that of an info without server capabilities.
+     */
+    virtual ErrCode INTERFACE_FUNC createAddDeviceConfig(IAddDeviceConfig** config, IDeviceInfo* info, IString* prefix = nullptr) = 0;
+
+    /*!
+     * @brief Creates a config for adding a streaming.
+     * @param[out] config The add streaming config
+     * @param connectionString The connection string, or only its prefix
+     *
+     * Fails with OPENDAQ_ERR_NOTFOUND when no loaded Streaming type has the prefix of the connection string.
+     */
+    virtual ErrCode INTERFACE_FUNC createAddStreamingConfig(IAddStreamingConfig** config, IString* connectionString) = 0;
 };
 /*!@}*/
 

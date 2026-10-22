@@ -72,6 +72,8 @@ public:
     ErrCode INTERFACE_FUNC completeDeviceCapabilities(IDevice* device) override;
     ErrCode INTERFACE_FUNC createDevices(IDict** devices, IDict* connectionArgs, IComponent* parent, IDict* errCodes = nullptr, IDict* errorInfos = nullptr) override;
     ErrCode INTERFACE_FUNC getDiscoveryInfo(IDeviceInfo** deviceInfo, IString* manufacturer, IString* serialNumber) override;
+    ErrCode INTERFACE_FUNC createAddDeviceConfig(IAddDeviceConfig** config, IDeviceInfo* info, IString* prefix = nullptr) override;
+    ErrCode INTERFACE_FUNC createAddStreamingConfig(IAddStreamingConfig** config, IString* connectionString) override;
 
 private:
     ErrCode createDeviceInternal(IDevice** device, IString* connectionString, IComponent* parent, IPropertyObject* config);
