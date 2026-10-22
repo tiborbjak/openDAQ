@@ -46,6 +46,8 @@ BEGIN_NAMESPACE_OPENDAQ
  * @param linkedDeviceType The device type this streaming type shares its connection parameters with (including
  * supported authentication methods). Left unset, this streaming type doesn't share its parameters with any
  * specific device type.
+ *
+ * Fails with OPENDAQ_ERR_INVALIDPARAMETER when the ID is empty, `StreamingType` or `StreamingMode`.
  */
 inline StreamingTypePtr StreamingType(const StringPtr& id,
                                               const StringPtr& name,

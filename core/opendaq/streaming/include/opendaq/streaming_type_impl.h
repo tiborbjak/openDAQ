@@ -28,6 +28,10 @@ public:
     using Self = StreamingTypeImpl;
     using Super = GenericComponentTypeImpl<IStreamingType>;
 
+    struct DeserializeTag
+    {
+    };
+
     explicit StreamingTypeImpl(const StringPtr& id,
                                const StringPtr& name,
                                const StringPtr& description,
@@ -35,6 +39,15 @@ public:
                                const PropertyObjectPtr& defaultConfig,
                                const DictPtr<IString, IAuthenticationMethod>& supportedAuthenticationMethods,
                                const DeviceTypePtr& linkedDeviceType = nullptr);
+
+    StreamingTypeImpl(const StringPtr& id,
+                      const StringPtr& name,
+                      const StringPtr& description,
+                      const StringPtr& prefix,
+                      const PropertyObjectPtr& defaultConfig,
+                      const DictPtr<IString, IAuthenticationMethod>& supportedAuthenticationMethods,
+                      const DeviceTypePtr& linkedDeviceType,
+                      DeserializeTag);
 
     explicit StreamingTypeImpl(const ComponentTypeBuilderPtr& builder);
 
