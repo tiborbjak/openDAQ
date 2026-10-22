@@ -22,6 +22,8 @@
 #include <coreobjects/property_object.h>
 #include <coretypes/listobject.h>
 #include <opendaq/device_type.h>
+#include <opendaq/add_device_config.h>
+#include <opendaq/add_streaming_config.h>
 #include <opendaq/streaming.h>
 #include <opendaq/streaming_type.h>
 #include <opendaq/sync_component.h>
@@ -281,6 +283,8 @@ DECLARE_OPENDAQ_INTERFACE(IDevice, IFolder)
      *     connecting to the selected device type (eg. via the native or OPC UA protocols).
      *   - "Streaming": Same as device, but used to configure each individual streaming connection established
      *     when calling `addDevice`.
+     *
+     * @deprecated Use createAddDeviceConfig instead.
      */
     virtual ErrCode INTERFACE_FUNC createDefaultAddDeviceConfig(IPropertyObject** defaultConfig) = 0;
 
@@ -416,6 +420,36 @@ DECLARE_OPENDAQ_INTERFACE(IDevice, IFolder)
      * The dictionary is empty if the device cannot add devices from modules.
      */
     virtual ErrCode INTERFACE_FUNC getAvailableStreamingTypes(IDict** streamingTypes) = 0;
+
+    /*!
+     * @brief Creates a config for adding the device described by the device info.
+     * @param[out] config The add device config
+     * @param info The device info, discovered or holding only a connection string
+     * @param prefix The connection string prefix of the Device type to use
+     *
+     * Selects the Device and Streaming types as `IModuleManagerUtils::createAddDeviceConfig` does.
+     * Fails with OPENDAQ_ERR_NOTFOUND when no loaded Device type has the prefix.
+     * Fails with OPENDAQ_ERR_NOTFOUND when a discovered info has no capability with the prefix.
+     * Fails with OPENDAQ_ERR_INVALIDPARAMETER when the prefix differs from that of an info without server capabilities.
+     */
+    virtual ErrCode INTERFACE_FUNC createAddDeviceConfig(IAddDeviceConfig** config, IDeviceInfo* info, IString* prefix = nullptr) = 0;
+
+    /*!
+     * @brief Creates a config for adding a streaming.
+     * @param[out] config The add streaming config
+     * @param connectionString The connection string, or only its prefix
+     *
+     * Fails with OPENDAQ_ERR_NOTFOUND when no loaded Streaming type has the prefix of the connection string.
+     */
+    virtual ErrCode INTERFACE_FUNC createAddStreamingConfig(IAddStreamingConfig** config, IString* connectionString) = 0;
+
+    /*!
+     * @brief Gets a copy of the config the device was added with.
+     * @param[out] config The add device config
+     *
+     * The config is null for the root device and for a device not added with an add device config.
+     */
+    virtual ErrCode INTERFACE_FUNC getAddDeviceConfig(IAddDeviceConfig** config) = 0;
 };
 /*!@}*/
 

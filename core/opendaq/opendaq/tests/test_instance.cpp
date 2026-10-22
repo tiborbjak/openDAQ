@@ -6,6 +6,10 @@
 #include <opendaq/module_impl.h>
 #include <opendaq/module_manager_utils_ptr.h>
 #include <opendaq/streaming_type_factory.h>
+#include <opendaq/device_type_factory.h>
+#include <opendaq/device_info_factory.h>
+#include <opendaq/add_component_config_factory.h>
+#include <opendaq/component_private_ptr.h>
 #include <opendaq/component_type_builder_factory.h>
 #include <testutils/testutils.h>
 
@@ -152,6 +156,29 @@ TEST_F(InstanceTest, EnumerateStreamingTypes)
     const auto managerTypes = instance.getModuleManager().asPtr<IModuleManagerUtils>().getAvailableStreamingTypes();
     ASSERT_EQ(streamingTypes, managerTypes);
     ASSERT_EQ(instance.getRootDevice().getAvailableStreamingTypes(), managerTypes);
+}
+
+TEST_F(InstanceTest, CreateAddConfigs)
+{
+    auto instance = test_helpers::setupInstance();
+    instance.getModuleManager().addModule(createWithImplementation<IModule, MockStreamingTypesModule>(instance.getContext()));
+
+    ASSERT_EQ(instance.createAddDeviceConfig(DeviceInfo("daqmock://host")).getDeviceType().getId(), "mock_phys_device");
+    ASSERT_EQ(instance.getRootDevice().createAddDeviceConfig(DeviceInfo("daqmock://host")).getDeviceType().getId(), "mock_phys_device");
+
+    ASSERT_EQ(instance.createAddStreamingConfig("daqmocka://host").getStreamingType().getId(), "mock_streaming_a");
+    ASSERT_EQ(instance.getRootDevice().createAddStreamingConfig("daqmocka://").getStreamingType().getId(), "mock_streaming_a");
+}
+
+TEST_F(InstanceTest, GetAddDeviceConfigOfRootDeviceIsNull)
+{
+    auto instance = test_helpers::setupInstance();
+    const auto deviceType = DeviceType("mock_dev", "Mock device", "", "daqmockdev");
+    instance.getRootDevice().asPtr<IComponentPrivate>().setComponentConfig(
+        AddDeviceConfig(deviceType, Dict<IString, IStreamingType>(), False));
+
+    ASSERT_FALSE(instance.getAddDeviceConfig().assigned());
+    ASSERT_FALSE(instance.getRootDevice().getAddDeviceConfig().assigned());
 }
 
 TEST_F(InstanceTest, EnumerateDeviceTypes)

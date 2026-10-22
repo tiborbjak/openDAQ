@@ -49,6 +49,8 @@
 
 #include <opendaq/thread_name.h>
 #include <opendaq/module_manager_check_dependencies.h>
+#include <opendaq/add_component_config_factory.h>
+#include <opendaq/add_streaming_options_ptr.h>
 
 BEGIN_NAMESPACE_OPENDAQ
 
@@ -1500,6 +1502,169 @@ ErrCode ModuleManagerImpl::getDiscoveryInfo(IDeviceInfo** deviceInfo, IString* m
         }
     }
     return OPENDAQ_NOTFOUND;
+}
+
+ErrCode ModuleManagerImpl::createAddDeviceConfig(IAddDeviceConfig** config, IDeviceInfo* info, IString* prefix)
+{
+    OPENDAQ_PARAM_NOT_NULL(config);
+    OPENDAQ_PARAM_NOT_NULL(info);
+
+    return daqTry([&]()
+    {
+        const auto infoPtr = DeviceInfoPtr::Borrow(info);
+        const auto prefixPtr = StringPtr::Borrow(prefix);
+        const bool hasPrefix = prefixPtr.assigned() && prefixPtr.getLength() > 0;
+
+        DictPtr<IString, IDeviceType> deviceTypes;
+        OPENDAQ_RETURN_IF_FAILED(getAvailableDeviceTypes(&deviceTypes));
+        DictPtr<IString, IStreamingType> streamingTypes;
+        OPENDAQ_RETURN_IF_FAILED(getAvailableStreamingTypes(&streamingTypes));
+
+        const auto findDeviceType = [&](const std::string& typePrefix) -> DeviceTypePtr
+        {
+            for (const auto& [_, type] : deviceTypes)
+            {
+                if (type.getConnectionStringPrefix() == typePrefix)
+                    return type;
+            }
+            return nullptr;
+        };
+
+        const auto findStreamingType = [&](const std::string& typePrefix) -> StreamingTypePtr
+        {
+            for (const auto& [_, type] : streamingTypes)
+            {
+                if (type.getConnectionStringPrefix() == typePrefix)
+                    return type;
+            }
+            return nullptr;
+        };
+
+        const auto capabilities = infoPtr.getServerCapabilities();
+        const bool discovered = capabilities.getCount() > 0;
+
+        DeviceTypePtr deviceType;
+        auto listedTypes = Dict<IString, IStreamingType>();
+
+        if (discovered)
+        {
+            if (hasPrefix)
+            {
+                bool advertised = false;
+                for (const auto& capability : capabilities)
+                    advertised = advertised || capability.getPrefix() == prefixPtr;
+
+                if (!advertised)
+                    return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND,
+                                               fmt::format(R"(The device has no server capability with the prefix "{}")", prefixPtr));
+
+                deviceType = findDeviceType(prefixPtr);
+                if (!deviceType.assigned())
+                    return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND,
+                                               fmt::format(R"(No loaded device type for the prefix "{}")", prefixPtr));
+            }
+            else
+            {
+                uint16_t selectedPriority = 0;
+                for (const auto& capability : capabilities)
+                {
+                    const auto type = findDeviceType(capability.getPrefix());
+                    if (!type.assigned())
+                        continue;
+
+                    const auto priority = GetServerCapabilityPriority(capability);
+                    if (!deviceType.assigned() || priority > selectedPriority)
+                    {
+                        deviceType = type;
+                        selectedPriority = priority;
+                    }
+                }
+
+                if (!deviceType.assigned())
+                    return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND, "No loaded device type for any server capability of the device");
+            }
+
+            for (const auto& capability : capabilities)
+            {
+                const auto protocolType = capability.getProtocolType();
+                if (protocolType != ProtocolType::Streaming && protocolType != ProtocolType::ConfigurationAndStreaming)
+                    continue;
+
+                const auto type = findStreamingType(capability.getPrefix());
+                if (type.assigned() && !listedTypes.hasKey(type.getId()))
+                    listedTypes.set(type.getId(), type);
+            }
+        }
+        else
+        {
+            const std::string connectionStringPrefix = getPrefixFromConnectionString(infoPtr.getConnectionString());
+            if (hasPrefix && prefixPtr != connectionStringPrefix)
+            {
+                return DAQ_MAKE_ERROR_INFO(
+                    OPENDAQ_ERR_INVALIDPARAMETER,
+                    fmt::format(
+                        R"(Prefix "{}" differs from the prefix "{}" of the device connection string)", prefixPtr, connectionStringPrefix));
+            }
+
+            deviceType = findDeviceType(connectionStringPrefix);
+            if (!deviceType.assigned())
+                return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND,
+                                           fmt::format(R"(No loaded device type for the prefix "{}")", connectionStringPrefix));
+
+            for (const auto& [id, type] : streamingTypes)
+                listedTypes.set(id, type);
+        }
+
+        auto addDeviceConfig = AddDeviceConfig(deviceType, listedTypes, scanOnAdd);
+
+        const auto options = addDeviceConfig.getStreamingOptions();
+        if (options.assigned())
+        {
+            StringPtr selectedId;
+            for (const auto& [id, type] : listedTypes)
+            {
+                const DeviceTypePtr linkedDeviceType = type.getLinkedDeviceType();
+                if (linkedDeviceType.assigned() && linkedDeviceType.getId() == deviceType.getId())
+                {
+                    selectedId = id;
+                    break;
+                }
+            }
+
+            if (!selectedId.assigned() && discovered && listedTypes.getCount() > 0)
+                selectedId = listedTypes.getKeyList()[0];
+            if (selectedId.assigned())
+                options.setStreamingType(selectedId);
+        }
+
+        *config = addDeviceConfig.detach();
+        return OPENDAQ_SUCCESS;
+    });
+}
+
+ErrCode ModuleManagerImpl::createAddStreamingConfig(IAddStreamingConfig** config, IString* connectionString)
+{
+    OPENDAQ_PARAM_NOT_NULL(config);
+    OPENDAQ_PARAM_NOT_NULL(connectionString);
+
+    return daqTry([&]()
+    {
+        const std::string prefix = getPrefixFromConnectionString(StringPtr::Borrow(connectionString));
+
+        DictPtr<IString, IStreamingType> streamingTypes;
+        OPENDAQ_RETURN_IF_FAILED(getAvailableStreamingTypes(&streamingTypes));
+
+        for (const auto& [_, type] : streamingTypes)
+        {
+            if (type.getConnectionStringPrefix() == prefix)
+            {
+                *config = AddStreamingConfig(type).detach();
+                return OPENDAQ_SUCCESS;
+            }
+        }
+
+        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_NOTFOUND, fmt::format(R"(No loaded streaming type for the prefix "{}")", prefix));
+    });
 }
 
 uint16_t ModuleManagerImpl::GetServerCapabilityPriority(const ServerCapabilityPtr& cap)
