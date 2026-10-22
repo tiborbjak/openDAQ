@@ -10,6 +10,22 @@ StreamingTypeImpl::StreamingTypeImpl(const StringPtr& id,
                                      const PropertyObjectPtr& defaultConfig,
                                      const DictPtr<IString, IAuthenticationMethod>& supportedAuthenticationMethods,
                                      const DeviceTypePtr& linkedDeviceType)
+    : StreamingTypeImpl(id, name, description, prefix, defaultConfig, supportedAuthenticationMethods, linkedDeviceType, DeserializeTag{})
+{
+    if (!id.assigned() || id.getLength() == 0)
+        DAQ_THROW_EXCEPTION(InvalidParameterException, "Streaming type ID must not be empty");
+    if (id == "StreamingType" || id == "StreamingMode")
+        DAQ_THROW_EXCEPTION(InvalidParameterException, "Streaming type ID \"{}\" is reserved", id);
+}
+
+StreamingTypeImpl::StreamingTypeImpl(const StringPtr& id,
+                                     const StringPtr& name,
+                                     const StringPtr& description,
+                                     const StringPtr& prefix,
+                                     const PropertyObjectPtr& defaultConfig,
+                                     const DictPtr<IString, IAuthenticationMethod>& supportedAuthenticationMethods,
+                                     const DeviceTypePtr& linkedDeviceType,
+                                     DeserializeTag)
     : Super(StreamingTypeStructType(), id, name, description, prefix, defaultConfig, supportedAuthenticationMethods)
     , linkedDeviceType(linkedDeviceType)
 {
@@ -185,7 +201,7 @@ ErrCode StreamingTypeImpl::Deserialize(ISerializedObject* serialized, IBaseObjec
             linkedDeviceType = serializedObj.readObject("linkedDeviceType", contextPtr, factoryCallbackPtr).asPtr<IDeviceType>();
 
         auto streamingType = createWithImplementation<IStreamingType, StreamingTypeImpl>(
-            id, name, description, prefix, defaultConfig, supportedAuthenticationMethods, linkedDeviceType);
+            id, name, description, prefix, defaultConfig, supportedAuthenticationMethods, linkedDeviceType, DeserializeTag{});
 
         if (serializedObj.hasKey("moduleInfo"))
         {

@@ -86,4 +86,25 @@ TEST_F(StreamingTypeTest, DeserializeMinimal)
     ASSERT_FALSE(deserialized.getLinkedDeviceType().assigned());
 }
 
+TEST_F(StreamingTypeTest, FactoryRejectsEmptyAndReservedIds)
+{
+    ASSERT_THROW(StreamingType("", "name", "desc", "prefix"), InvalidParameterException);
+    ASSERT_THROW(StreamingType(nullptr, "name", "desc", "prefix"), InvalidParameterException);
+    ASSERT_THROW(StreamingType("StreamingType", "name", "desc", "prefix"), InvalidParameterException);
+    ASSERT_THROW(StreamingType("StreamingMode", "name", "desc", "prefix"), InvalidParameterException);
+    ASSERT_THROW(StreamingTypeBuilder().build(), InvalidParameterException);
+    ASSERT_THROW(StreamingTypeBuilder().setId("").build(), InvalidParameterException);
+    ASSERT_THROW(StreamingTypeBuilder().setId("StreamingMode").build(), InvalidParameterException);
+}
+
+TEST_F(StreamingTypeTest, DeserializeEmptyAndReservedIds)
+{
+    for (const auto& id : {"", "StreamingType", "StreamingMode"})
+    {
+        const std::string json = std::string(R"({"__type":"StreamingType","id":")") + id + R"("})";
+        const StreamingTypePtr deserialized = JsonDeserializer().deserialize(json, nullptr, nullptr);
+        ASSERT_EQ(deserialized.getId(), id);
+    }
+}
+
 END_NAMESPACE_OPENDAQ
