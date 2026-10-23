@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import importlib.util
 import os
 import enum
 import sys
@@ -21,30 +22,25 @@ try:
 except Exception:
     pass
 
-try:
-    from gui_demo.components.block_view import BlockView
-    from gui_demo.components.properties_view import PropertiesView
-    from gui_demo.components.add_device_dialog import AddDeviceDialog
-    from gui_demo.components.add_server_dialog import AddServerDialog
-    from gui_demo.components.add_function_block_dialog import AddFunctionBlockDialog
-    from gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
-    from gui_demo.components.logs_dialog import LogsDialog
-    from gui_demo.app_context import AppContext
-    from gui_demo.authenticator import ModuleAuth, MODULE_AUTH_MODES, DEFAULT_MODULE_AUTH
-    from gui_demo import utils
-    from gui_demo.event_port import EventPort
-except Exception as e:
-    from opendaq.gui_demo.components.block_view import BlockView
-    from opendaq.gui_demo.components.properties_view import PropertiesView
-    from opendaq.gui_demo.components.add_device_dialog import AddDeviceDialog
-    from opendaq.gui_demo.components.add_server_dialog import AddServerDialog
-    from opendaq.gui_demo.components.add_function_block_dialog import AddFunctionBlockDialog
-    from opendaq.gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
-    from opendaq.gui_demo.components.logs_dialog import LogsDialog
-    from opendaq.gui_demo.app_context import AppContext
-    from opendaq.gui_demo.authenticator import ModuleAuth, MODULE_AUTH_MODES, DEFAULT_MODULE_AUTH
-    from opendaq.gui_demo import utils
-    from opendaq.gui_demo.event_port import EventPort
+if __package__:
+    # run from the wheel (python -m opendaq), where gui_demo is next to this file in the opendaq package:
+    # load it as the top level gui_demo package, the imports below then work the same as when run as a script
+    spec = importlib.util.spec_from_file_location(
+        'gui_demo', os.path.join(os.path.dirname(__file__), 'gui_demo', '__init__.py'))
+    sys.modules['gui_demo'] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sys.modules['gui_demo'])
+
+from gui_demo.components.block_view import BlockView
+from gui_demo.components.properties_view import PropertiesView
+from gui_demo.components.add_device_dialog import AddDeviceDialog
+from gui_demo.components.add_server_dialog import AddServerDialog
+from gui_demo.components.add_function_block_dialog import AddFunctionBlockDialog
+from gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
+from gui_demo.components.logs_dialog import LogsDialog
+from gui_demo.app_context import AppContext
+from gui_demo.authenticator import ModuleAuth, MODULE_AUTH_MODES, DEFAULT_MODULE_AUTH
+from gui_demo import utils
+from gui_demo.event_port import EventPort
 
 
 class DisplayType(enum.Enum):
