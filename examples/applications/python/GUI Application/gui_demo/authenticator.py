@@ -1,5 +1,6 @@
 import datetime
 import enum
+import hashlib
 import json
 import os
 import platform
@@ -7,15 +8,22 @@ import sys
 import tempfile
 
 try:
-    from opendaq.authenticator import WheelModulesAuthenticator
+    from opendaq import authenticator as wheel_authenticator
 except ImportError:
-    WheelModulesAuthenticator = None
+    wheel_authenticator = None
+
+OPENDAQ_ERR_NOTIMPLEMENTED = 0x80000016
 
 
 class ModuleAuth(enum.Enum):
     NONE = 'none'    # load all modules without authentication
     WHEEL = 'wheel'  # authenticate the wheel modules, load all other modules
     ALL = 'all'      # authenticate all modules
+
+
+# the wheel mode only when running from the wheel, there are no wheel modules otherwise
+MODULE_AUTH_MODES = [mode for mode in ModuleAuth if mode != ModuleAuth.WHEEL or wheel_authenticator is not None]
+DEFAULT_MODULE_AUTH = ModuleAuth.WHEEL if wheel_authenticator is not None else ModuleAuth.NONE
 
 
 class ModuleAllowlist:
@@ -104,16 +112,71 @@ class ModuleAllowlist:
         return entries
 
 
-if WheelModulesAuthenticator is not None:
-    class AppModuleAuthenticator(WheelModulesAuthenticator):
+class AppModuleAuthenticator:
+    """Asks the user about modules that are not in the allowlist."""
+
+    hash_name = 'sha256'
+
+    def __init__(self, parent, context):
+        self.parent = parent
+        self.context = context
+        self.allowlist = ModuleAllowlist(
+            self.hash_name, os.path.join(context.config_dir, ModuleAllowlist.file_name))
+
+    def __call__(self, method, params):
+        if method != 'authenticateModuleBinary':
+            return {'ErrorCode': OPENDAQ_ERR_NOTIMPLEMENTED, 'ErrorMessage': 'Authenticator: {} not implemented'.format(method)}
+        return self.auth_module(params['BinaryPath'])
+
+    def auth_module(self, path, reason='This module has not been authorized:'):
+        return {'BinaryValid': self.ask_trust(path, self.hash_of(path), 'Module not authenticated', reason)}
+
+    def ask_trust(self, path, module_hash, title, reason):
+        """Loads the module if its hash is in the allowlist, otherwise asks the user.
+        Answering "Always" adds the module to the allowlist."""
+        status = self.allowlist.check(module_hash, path)
+        if status == ModuleAllowlist.Status.ALLOWED:
+            return True
+        if status == ModuleAllowlist.Status.ALLOWED_NEW_FILE:
+            self.allow(module_hash, path)
+            return True
+        if status == ModuleAllowlist.Status.CHANGED:
+            title = 'Module has been modified'
+            reason = 'This module was allowed before, but it has changed since:'
+        # imported here, components import app_context which imports this module
+        from .components.authorize_module_dialog import AuthorizeModuleDialog
+        answer = AuthorizeModuleDialog(self.parent, self.context, path, title, reason).ask()
+        if answer == AuthorizeModuleDialog.ALWAYS:
+            self.allow(module_hash, path)
+        return answer != AuthorizeModuleDialog.NO
+
+    def allow(self, module_hash, path):
+        """Adds the module to the allowlist. A failed save only warns: the module is still
+        allowed for this session, and an exception here would reject it."""
+        try:
+            self.allowlist.allow(module_hash, path)
+        except OSError as e:
+            print('Saving the module allowlist failed:', e, file=sys.stderr)
+
+    @classmethod
+    def hash_of(cls, path):
+        h = hashlib.new(cls.hash_name)
+        # read in chunks, modules can be large
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(1 << 20), b''):
+                h.update(chunk)
+        return h.hexdigest()
+
+
+if wheel_authenticator is not None:
+    # the wheel authenticator comes first: its __call__ tells wheel modules from the others,
+    # and its auth_nonwheel_module loads all modules outside the wheel
+    class WheelModulesAuthenticator(wheel_authenticator.WheelModulesAuthenticator, AppModuleAuthenticator):
         """Authenticates the wheel modules, asking the user about those that fail; loads all other modules."""
 
         def __init__(self, parent, context):
-            super().__init__()
-            self.parent = parent
-            self.context = context
-            self.allowlist = ModuleAllowlist(
-                self.hash_name, os.path.join(context.config_dir, ModuleAllowlist.file_name))
+            wheel_authenticator.WheelModulesAuthenticator.__init__(self)
+            AppModuleAuthenticator.__init__(self, parent, context)
 
         def auth_wheel_module(self, path, hash):
             """Asks the user whether to load a wheel module that failed authentication."""
@@ -128,51 +191,23 @@ if WheelModulesAuthenticator is not None:
                           'and does not match the one shipped with the wheel build:')
             ret['BinaryValid'] = self.ask_trust(path, hash, 'Module authentication failed', reason)
             return ret
-
-        def ask_trust(self, path, module_hash, title, reason):
-            """Loads the module if its hash is in the allowlist, otherwise asks the user.
-            Answering "Always" adds the module to the allowlist."""
-            status = self.allowlist.check(module_hash, path)
-            if status == ModuleAllowlist.Status.ALLOWED:
-                return True
-            if status == ModuleAllowlist.Status.ALLOWED_NEW_FILE:
-                self.allow(module_hash, path)
-                return True
-            if status == ModuleAllowlist.Status.CHANGED:
-                title = 'Module has been modified'
-                reason = 'This module was allowed before, but it has changed since:'
-            # imported here, components import app_context which imports this module
-            from .components.authorize_module_dialog import AuthorizeModuleDialog
-            answer = AuthorizeModuleDialog(self.parent, self.context, path, title, reason).ask()
-            if answer == AuthorizeModuleDialog.ALWAYS:
-                self.allow(module_hash, path)
-            return answer != AuthorizeModuleDialog.NO
-
-        def allow(self, module_hash, path):
-            """Adds the module to the allowlist. A failed save only warns: the module is still
-            allowed for this session, and an exception here would reject it."""
-            try:
-                self.allowlist.allow(module_hash, path)
-            except OSError as e:
-                print('Saving the module allowlist failed:', e, file=sys.stderr)
-
-    class AllModulesAuthenticator(AppModuleAuthenticator):
-        """Also asks the user about modules outside the wheel that are not in the allowlist."""
-
-        def auth_nonwheel_module(self, path):
-            return {'BinaryValid': self.ask_trust(
-                path, self.hash_of(path), 'Module not authenticated',
-                'This module is not part of the openDAQ python wheel and has not been authorized:')}
 else:
-    AppModuleAuthenticator = None
-    AllModulesAuthenticator = None
+    WheelModulesAuthenticator = None
+
+
+class AllModulesAuthenticator(WheelModulesAuthenticator or AppModuleAuthenticator):
+    """Also asks the user about modules outside the wheel that are not in the allowlist."""
+
+    def auth_nonwheel_module(self, path):
+        """Called by the wheel authenticator only, without the wheel all modules go through auth_module."""
+        return self.auth_module(path, 'This module is not part of the openDAQ python wheel and has not been authorized:')
 
 
 def create_module_authenticator(mode, parent, context):
     """The authenticator for the mode; None if modules are not authenticated,
-    or if no authenticator is available (not running from the wheel)."""
-    if WheelModulesAuthenticator is None or mode == ModuleAuth.NONE:
+    or if there are no wheel modules to authenticate (not running from the wheel)."""
+    if mode == ModuleAuth.NONE or (mode == ModuleAuth.WHEEL and WheelModulesAuthenticator is None):
         return None
     if mode == ModuleAuth.ALL:
         return AllModulesAuthenticator(parent, context)
-    return AppModuleAuthenticator(parent, context)
+    return WheelModulesAuthenticator(parent, context)
