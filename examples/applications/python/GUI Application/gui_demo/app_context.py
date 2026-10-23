@@ -6,7 +6,7 @@ import tempfile
 import opendaq as daq
 
 from . import utils
-from .authenticator import ModuleAuth, create_module_authenticator
+from .authenticator import DEFAULT_MODULE_AUTH, create_module_authenticator
 from typing import Callable, Optional
 
 
@@ -51,7 +51,7 @@ class AppContext(object):
             builder.module_path = daq.OPENDAQ_MODULES_DIR
 
         authenticator = create_module_authenticator(
-            getattr(params, 'module_auth', ModuleAuth.WHEEL), parent, self)
+            getattr(params, 'module_auth', DEFAULT_MODULE_AUTH), parent, self)
         if authenticator is not None:
             builder.module_authenticator = daq.FunctionModuleAuthenticator(daq.Function(authenticator))
             builder.load_authenticated_modules_only = True

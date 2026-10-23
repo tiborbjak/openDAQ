@@ -30,7 +30,7 @@ try:
     from gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
     from gui_demo.components.logs_dialog import LogsDialog
     from gui_demo.app_context import AppContext
-    from gui_demo.authenticator import AppModuleAuthenticator, ModuleAuth
+    from gui_demo.authenticator import ModuleAuth, MODULE_AUTH_MODES, DEFAULT_MODULE_AUTH
     from gui_demo import utils
     from gui_demo.event_port import EventPort
 except Exception as e:
@@ -42,7 +42,7 @@ except Exception as e:
     from opendaq.gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
     from opendaq.gui_demo.components.logs_dialog import LogsDialog
     from opendaq.gui_demo.app_context import AppContext
-    from opendaq.gui_demo.authenticator import AppModuleAuthenticator, ModuleAuth
+    from opendaq.gui_demo.authenticator import ModuleAuth, MODULE_AUTH_MODES, DEFAULT_MODULE_AUTH
     from opendaq.gui_demo import utils
     from opendaq.gui_demo.event_port import EventPort
 
@@ -76,7 +76,7 @@ class ContextParams:
     module_path: str = ''
     config_dir: str = None
     discovery_servers: list = None
-    module_auth: ModuleAuth = ModuleAuth.WHEEL
+    module_auth: ModuleAuth = DEFAULT_MODULE_AUTH
 
 class App(tk.Tk):
 
@@ -102,7 +102,7 @@ class App(tk.Tk):
             context_params.discovery_servers = []
 
         context_params.config_dir = args.config_dir or None
-        context_params.module_auth = ModuleAuth(getattr(args, 'module_auth', ModuleAuth.WHEEL.value))
+        context_params.module_auth = ModuleAuth(getattr(args, 'module_auth', DEFAULT_MODULE_AUTH.value))
 
         self.context = AppContext(context_params, self)
         self.event_port = EventPort(self, event_callback=self.on_refresh_event)
@@ -1624,12 +1624,11 @@ if __name__ == '__main__':
     parser.add_argument(
         '--discovery_server', help='Discovery server protocols (comma-separated, e.g. "mdns")',
         type=str, default='mdns')
-    # only the wheel ships an authenticator
-    if AppModuleAuthenticator is not None:
-        parser.add_argument(
-            '--module_auth', help='Which modules to authenticate before loading them: '
-            'none, the wheel modules only (default; all other modules are loaded), or all',
-            choices=[mode.value for mode in ModuleAuth], default=ModuleAuth.WHEEL.value)
+    parser.add_argument(
+        '--module_auth', help='Which modules to authenticate before loading them: ' + (
+            'none, the wheel modules only (default), or all'
+            if ModuleAuth.WHEEL in MODULE_AUTH_MODES else 'none (default) or all'),
+        choices=[mode.value for mode in MODULE_AUTH_MODES], default=DEFAULT_MODULE_AUTH.value)
 
     app = App(parser.parse_args())
     app.mainloop()
