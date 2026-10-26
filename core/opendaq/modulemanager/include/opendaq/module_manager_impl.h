@@ -37,6 +37,7 @@
 #include <opendaq/component_type_ptr.h>
 #include <opendaq/credential_request_ptr.h>
 #include <opendaq/credential_provider_ptr.h>
+#include <opendaq/add_device_config_ptr.h>
 
 BEGIN_NAMESPACE_OPENDAQ
 struct ModuleLibrary;
@@ -77,6 +78,22 @@ public:
 
 private:
     ErrCode createDeviceInternal(IDevice** device, IString* connectionString, IComponent* parent, IPropertyObject* config);
+    ErrCode createDeviceFromAddDeviceConfig(IDevice** device,
+                                            const StringPtr& connectionString,
+                                            IComponent* parent,
+                                            const AddDeviceConfigPtr& inputConfig,
+                                            const AuthenticationConfigPtr& authenticationConfig);
+    ErrCode createDeviceWithModule(IDevice** device,
+                                   const ModulePtr& module,
+                                   const DeviceTypePtr& deviceType,
+                                   const StringPtr& connectionString,
+                                   IComponent* parent,
+                                   const PropertyObjectPtr& deviceTypeConfig,
+                                   const PropertyObjectPtr& componentConfig,
+                                   const AuthenticationConfigPtr& authenticationConfig,
+                                   const DeviceInfoPtr& discoveredDeviceInfo);
+    ErrCode scanIfOutdated();
+    PropertyObjectPtr createDefaultAddDeviceConfigFrom(const AddDeviceConfigPtr& config);
 
     static void PopulateDeviceTypeConfigFromConnStrOptions(PropertyObjectPtr& deviceTypeConfig,
                                                            const tsl::ordered_map<std::string, ObjectPtr<IBaseObject>>& options);
@@ -91,10 +108,15 @@ private:
     DeviceInfoPtr getSmartConnectionDeviceInfo(const StringPtr& inputConnectionString) const;
     DeviceInfoPtr getDiscoveredDeviceInfo(const DeviceInfoPtr& deviceInfo) const;
     StringPtr getConnectionStringWithType(const ServerCapabilityPtr& capability, const StringPtr& primaryAddressType) const;
+    StringPtr getConnectionStringFromCapability(const ServerCapabilityPtr& capability, const std::vector<StringPtr>& addressTypes) const;
     StringPtr resolveSmartConnectionString(const StringPtr& inputConnectionString,
                                            const DeviceInfoPtr& discoveredDeviceInfo,
                                            const PropertyObjectPtr& generalConfig,
                                            const LoggerComponentPtr& loggerComponent) const;
+    StringPtr resolveSmartConnectionStringForType(const StringPtr& inputConnectionString,
+                                                  const DeviceInfoPtr& discoveredDeviceInfo,
+                                                  const DeviceTypePtr& deviceType,
+                                                  AddressType primaryAddressType) const;
     DeviceTypePtr getDeviceTypeFromConnectionString(const StringPtr& connectionString, const ModulePtr& module) const;
 
     static uint16_t GetServerCapabilityPriority(const ServerCapabilityPtr& cap);

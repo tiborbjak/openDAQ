@@ -23,6 +23,7 @@ BEGIN_NAMESPACE_OPENDAQ
 
 static StringPtr DefineLocalId(const StringPtr& localId);
 static ContextPtr ContextFromInstanceBuilder(IInstanceBuilder* instanceBuilder);
+static bool IsMirroredDevice(const DevicePtr& device);
 
 InstanceImpl::InstanceImpl(ContextPtr context, const StringPtr& localId)
     : context(std::move(context))
@@ -53,6 +54,9 @@ InstanceImpl::InstanceImpl(IInstanceBuilder* instanceBuilder)
     if (connectionString.assigned() && connectionString.getLength())
     {
         rootDevice = moduleManager.asPtr<IModuleManagerUtils>(true).createDevice(connectionString, nullptr, rootDeviceConfig);
+        if (IsMirroredDevice(rootDevice))
+            DAQ_THROW_EXCEPTION(InvalidParameterException, "Cannot set mirrored device as root device");
+
         LOG_I("Root device set to {}", connectionString)
         rootDeviceSet = true;
     }
@@ -86,6 +90,19 @@ InstanceImpl::~InstanceImpl()
 
     rootDevice.remove();
     rootDevice.release();
+}
+
+static bool IsMirroredDevice(const DevicePtr& device)
+{
+    if (device.supportsInterface<IMirroredDeviceConfig>())
+        return true;
+
+    const auto info = device.getInfo();
+    if (!info.assigned())
+        return false;
+
+    const auto deviceType = info.getDeviceType();
+    return deviceType.assigned() && deviceType.getDeviceKind() == DeviceKind::Mirrored;
 }
 
 static StringPtr DefineLocalId(const StringPtr& localId)
@@ -378,7 +395,7 @@ ErrCode InstanceImpl::setRootDevice(IString* connectionString, IPropertyObject* 
 
     const auto newRootDevice = moduleManager.asPtr<IModuleManagerUtils>().createDevice(connectionString, nullptr, config);
 
-    if (newRootDevice.supportsInterface<IMirroredDeviceConfig>())
+    if (IsMirroredDevice(newRootDevice))
         return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_INVALIDPARAMETER, "Cannot set mirrored device as root device");
 
     this->rootDevice = newRootDevice;
