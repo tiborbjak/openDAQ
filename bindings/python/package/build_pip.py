@@ -6,23 +6,11 @@ import pathlib
 import subprocess
 import shutil
 import hashlib
+import base64
 import re
-import json
 
 from collections import namedtuple
 from argparse import ArgumentParser
-
-# import authenticator
-import importlib.util
-def import_from_path(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-authenticator = import_from_path(
-    'authenticator',
-    os.path.join(os.path.dirname(__file__), 'opendaq', 'authenticator.py'))
 
 
 def read_opendaq_version(version_file):
@@ -210,25 +198,8 @@ shutil.copy(os.path.join(path_build_pip_source_dir, 'opendaq', '__init__.py'), p
 replace_opendaq_version_stub(os.path.join(path_stage_package, '__init__.py'))
 os.makedirs(os.path.join(path_stage_package, 'opendaq'))
 
-def generate_module_hashes():
-    vendor = None
-    checksums = {}
-    wheel_auth = authenticator.WheelModulesAuthenticator
-    hash_of = wheel_auth.hash_of
-    for m in modules.modules:
-        path = os.path.join(path_stage_package, 'modules', m)
-        entry = {wheel_auth.hash_name : hash_of(path), 'vendor' : vendor}
-        checksums[os.path.basename(path)] = entry
-    checksums_path = os.path.join(path_stage_package, wheel_auth.checksums_file_rel_path())
-    with open(checksums_path, 'w') as f:
-        json.dump(checksums, f)
-    shutil.copy(os.path.join(path_build_pip_source_dir, 'opendaq', '{}.py'.format(authenticator.__name__)), path_stage_package)
-    with open(os.path.join(path_stage_package, '{}.py'.format(authenticator.__name__)), 'r+') as f:
-        r = f.read() + "\n\n{} = '{}'\n".format(wheel_auth.checksums_hash_var(), hash_of(checksums_path))
-        f.seek(0)
-        f.write(r)
-
-generate_module_hashes()
+# package modules
+shutil.copy(os.path.join(path_build_pip_source_dir, 'opendaq', 'authenticator.py'), path_stage_package)
 
 def generate_stubs(use_cache):
     stubs_cache_path = os.path.join(build_dir, '..', 'stubs')
@@ -274,7 +245,7 @@ generate_wheel_file(os.path.join(path_stage_dist_info, 'WHEEL'))
 
 
 def hash_file(file_path, algorithm='sha256'):
-    """Calculate the hash digest of a file using the specified algorithm."""
+    """Calculate the hash of a file in the RECORD format: <algorithm>=<urlsafe base64 digest without padding>."""
     hash_obj = hashlib.new(algorithm)
     with open(file_path, 'rb') as f:
         while True:
@@ -282,7 +253,8 @@ def hash_file(file_path, algorithm='sha256'):
             if not data:
                 break
             hash_obj.update(data)
-    return hash_obj.hexdigest()
+    digest = base64.urlsafe_b64encode(hash_obj.digest()).rstrip(b'=').decode('ascii')
+    return f'{algorithm}={digest}'
 
 
 def generate_record_file(source_root, destination):

@@ -128,7 +128,7 @@ class AppModuleAuthenticator:
         return self.auth_module(params['BinaryPath'])
 
     def auth_module(self, path, reason='This module has not been authorized:'):
-        valid = self.ask_trust(path, self.hash_of(path), 'Module not authenticated', reason)
+        valid = self.ask_trust(path, self.hash_of(path, self.hash_name), 'Module not authenticated', reason)
         return {'BinaryValid': valid, 'VendorKey': ''}
 
     def ask_trust(self, path, module_hash, title, reason):
@@ -159,8 +159,8 @@ class AppModuleAuthenticator:
             print('Saving the module allowlist failed:', e, file=sys.stderr)
 
     @classmethod
-    def hash_of(cls, path):
-        h = hashlib.new(cls.hash_name)
+    def hash_of(cls, path, hash_name):
+        h = hashlib.new(hash_name)
         # read in chunks, modules can be large
         with open(path, 'rb') as f:
             for chunk in iter(lambda: f.read(1 << 20), b''):
@@ -178,19 +178,22 @@ if wheel_authenticator is not None:
             wheel_authenticator.WheelModulesAuthenticator.__init__(self)
             AppModuleAuthenticator.__init__(self, parent, context)
 
-        def auth_wheel_module(self, path, hash):
+        def auth_wheel_module(self, path):
             """Asks the user whether to load a wheel module that failed authentication."""
-            ret = super().auth_wheel_module(path, hash)
-            if ret['BinaryValid']:
-                return ret
-            if os.path.basename(path) not in self.checksums:
+            valid, module_hash = super().check_wheel_module(path)
+            if valid:
+                return {'BinaryValid': True, 'VendorKey': ''}
+            if module_hash is None:
                 reason = ('This module was added to the openDAQ python wheel modules directory '
                           'and is not part of the original wheel build:')
             else:
                 reason = ('This module in the openDAQ python wheel modules directory was modified '
                           'and does not match the one shipped with the wheel build:')
-            ret['BinaryValid'] = self.ask_trust(path, hash, 'Module authentication failed', reason)
-            return ret
+            # reuse the RECORD check's hash if it is the allowlist algorithm
+            if module_hash is None or module_hash[0] != self.hash_name:
+                module_hash = (self.hash_name, self.hash_of(path, self.hash_name))
+            valid = self.ask_trust(path, module_hash[1], 'Module authentication failed', reason)
+            return {'BinaryValid': valid, 'VendorKey': ''}
 else:
     WheelModulesAuthenticator = None
 
