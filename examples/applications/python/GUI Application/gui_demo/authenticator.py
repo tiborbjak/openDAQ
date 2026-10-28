@@ -131,6 +131,9 @@ class ModuleAuthenticator:
         # TODO: raising errors from the authenticator function does not propagate correctly yet, enable once it is fixed
         # if method != 'authenticateModuleBinary':
         #     raise NotImplementedError('Authenticator: {} not implemented'.format(method))
+        if self.context.closing:
+            # the app was closed while loading the modules, reject the rest without checking them
+            return {'BinaryValid': False, 'VendorKey': ''}
         return {'BinaryValid': self.auth(params['BinaryPath']), 'VendorKey': ''}
 
     def auth(self, path):

@@ -39,6 +39,20 @@ class AppContext(object):
         # user-scoped app files, such as the module allowlist
         self.config_dir = getattr(params, 'config_dir', None) or self._default_config_dir()
         # daq
+        self.params = params
+        self.parent = parent
+        self.instance = None
+        self.log_file_path = None
+        # set when the app is closed while the modules load
+        self.closing = False
+        self.connection_string = ''
+        self.signals = {}
+        self.needs_refresh = False
+
+    def create_instance(self):
+        """Creates the openDAQ instance, which loads the modules. The module authenticator can ask the user
+        about a module, so this is called once the parent window is drawn, the dialog then opens over it."""
+        params = self.params
         builder = daq.InstanceBuilder()
         builder.scheduler_worker_num = 0
         builder.using_scheduler_main_loop = True
@@ -51,7 +65,7 @@ class AppContext(object):
             builder.module_path = daq.OPENDAQ_MODULES_DIR
 
         authenticator = create_module_authenticator(
-            getattr(params, 'module_auth', DEFAULT_MODULE_AUTH), parent, self)
+            getattr(params, 'module_auth', DEFAULT_MODULE_AUTH), self.parent, self)
         if authenticator is not None:
             builder.module_authenticator = daq.FunctionModuleAuthenticator(daq.Function(authenticator))
             builder.load_authenticated_modules_only = True
@@ -72,9 +86,6 @@ class AppContext(object):
 
         self.instance = daq.InstanceFromBuilder(builder)
         self.instance.context.on_core_event + daq.QueuedEventHandler(self.on_core_event)
-        self.connection_string = ''
-        self.signals = {}
-        self.needs_refresh = False
 
     @staticmethod
     def _remove_demo_log_files():

@@ -1,3 +1,4 @@
+import re
 import tkinter as tk
 from tkinter import ttk
 
@@ -19,22 +20,32 @@ class Dialog(tk.Toplevel):
         # Bind Escape key to close the dialog
         self.bind("<Escape>", lambda event: self.close())
 
+    def wm_geometry(self, newGeometry=None):
+        # remember the size set by a subclass, a hidden window reports 1x1 until it is shown
+        size = re.match(r'(\d+)x(\d+)', newGeometry or '')
+        if size:
+            self._requested_size = int(size.group(1)), int(size.group(2))
+        return tk.Toplevel.wm_geometry(self, newGeometry)
+
+    geometry = wm_geometry
+
     def center_window(self):
-        self.update_idletasks()  # ensure geometry is fully computed while hidden
-        w = self.winfo_width()
-        h = self.winfo_height()
+        """Positions the dialog over the main window while it is hidden. Moving a shown window makes Tk wait
+        for the window manager to confirm the move, up to 2s when it does not."""
+        self.update_idletasks()  # ensure the requested size is computed while hidden
+        w, h = getattr(self, '_requested_size', None) or (self.winfo_reqwidth(), self.winfo_reqheight())
         main_window = self.parent.winfo_toplevel()
         x = main_window.winfo_rootx() + main_window.winfo_width() // 2 - w // 2
         y = main_window.winfo_rooty() + main_window.winfo_height() // 2 - h // 2
-        self.geometry(f'{w}x{h}+{x}+{y}')
+        self.geometry(f'+{x}+{y}')
 
     def initial_update(self):
         pass
 
     def show(self):
         self.initial_update()   # populate content while dialog is still hidden
+        self.center_window()    # position before showing
         self.deiconify()        # appear fully populated in one step
-        self.center_window()    # geometry is fully known now, position before showing
         self.update_idletasks()
         self.event_generate('<<DialogReady>>')
         self.focus_set()
@@ -43,8 +54,8 @@ class Dialog(tk.Toplevel):
 
     def show_modeless(self):
         self.initial_update()
-        self.deiconify()
         self.center_window()
+        self.deiconify()
         self.update_idletasks()
         self.event_generate('<<DialogReady>>')
         self.focus_set()

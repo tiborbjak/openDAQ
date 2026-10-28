@@ -37,6 +37,7 @@ from gui_demo.components.add_server_dialog import AddServerDialog
 from gui_demo.components.add_function_block_dialog import AddFunctionBlockDialog
 from gui_demo.components.load_instance_config_dialog import LoadInstanceConfigDialog
 from gui_demo.components.logs_dialog import LogsDialog
+from gui_demo.components.authorize_module_dialog import AuthorizeModuleDialog
 from gui_demo.app_context import AppContext
 from gui_demo.authenticator import ModuleAuth, MODULE_AUTH_MODES, DEFAULT_MODULE_AUTH
 from gui_demo import utils
@@ -122,6 +123,23 @@ class App(tk.Tk):
             int(1500 * self.context.ui_scaling_factor * self.context.dpi_factor),
             int(800 * self.context.ui_scaling_factor * self.context.dpi_factor)))
 
+        # Draw the window before loading the modules, so the module authentication dialogs open over it.
+        # The rest of the window is built once the instance exists, so none of it can be used before then.
+        loading_label = ttk.Label(self, text='Loading modules...')
+        loading_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.protocol('WM_DELETE_WINDOW', self.close_while_loading_modules)
+        try:
+            self.update()
+            # the window may have been closed while it was drawn
+            if not self.context.closing:
+                self.context.create_instance()
+        finally:
+            self.protocol('WM_DELETE_WINDOW', self.destroy)
+        if self.context.closing:
+            self.destroy()
+            return
+        loading_label.destroy()
+
         self.context.load_icons(os.path.join(
             os.path.dirname(__file__), 'gui_demo', 'icons'))
 
@@ -199,6 +217,15 @@ class App(tk.Tk):
             self._load_config(args.config)
 
         self.poll_opendaq_events()
+
+    def close_while_loading_modules(self):
+        """Closing the window while the modules load rejects the module being asked about and the remaining ones,
+        the window is destroyed once the instance is created. A close requested while no dialog is open
+        is only handled by the main loop, once the window is fully built."""
+        self.context.closing = True
+        dialog = self.grab_current()
+        if isinstance(dialog, AuthorizeModuleDialog):
+            dialog.finish(AuthorizeModuleDialog.NO)
 
     def poll_opendaq_events(self):
         try:
