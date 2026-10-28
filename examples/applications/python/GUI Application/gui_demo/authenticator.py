@@ -1,16 +1,19 @@
+import base64
 import datetime
 import enum
 import hashlib
+import importlib.metadata
 import json
 import os
 import platform
 import sys
 import tempfile
 
-try:
-    from opendaq import authenticator as wheel_authenticator
-except ImportError:
-    wheel_authenticator = None
+import opendaq as daq
+
+# the wheel's modules directory; only the wheel defines OPENDAQ_MODULES_DIR, None otherwise
+WHEEL_MODULES_DIR = (os.path.normcase(os.path.realpath(os.path.join(daq.OPENDAQ_MODULES_DIR, 'modules')))
+                     if hasattr(daq, 'OPENDAQ_MODULES_DIR') else None)
 
 
 class ModuleAuth(enum.Enum):
@@ -20,8 +23,8 @@ class ModuleAuth(enum.Enum):
 
 
 # the wheel mode only when running from the wheel, there are no wheel modules otherwise
-MODULE_AUTH_MODES = [mode for mode in ModuleAuth if mode != ModuleAuth.WHEEL or wheel_authenticator is not None]
-DEFAULT_MODULE_AUTH = ModuleAuth.WHEEL if wheel_authenticator is not None else ModuleAuth.NONE
+MODULE_AUTH_MODES = [mode for mode in ModuleAuth if mode != ModuleAuth.WHEEL or WHEEL_MODULES_DIR is not None]
+DEFAULT_MODULE_AUTH = ModuleAuth.WHEEL if WHEEL_MODULES_DIR is not None else ModuleAuth.NONE
 
 
 class ModuleAllowlist:
@@ -110,26 +113,52 @@ class ModuleAllowlist:
         return entries
 
 
-class AppModuleAuthenticator:
-    """Asks the user about modules that are not in the allowlist."""
+class ModuleAuthenticator:
+    """Authenticates the wheel modules against the hashes in the wheel RECORD, and with the ALL mode
+    also the modules outside the wheel against the allowlist; asks the user about modules that fail."""
 
     hash_name = 'sha256'
 
-    def __init__(self, parent, context):
+    def __init__(self, mode, parent, context):
         self.parent = parent
         self.context = context
         self.allowlist = ModuleAllowlist(
             self.hash_name, os.path.join(context.config_dir, ModuleAllowlist.file_name))
+        self.wheel_checksums = load_wheel_checksums() if WHEEL_MODULES_DIR is not None else None
+        self.auth_other_modules = mode == ModuleAuth.ALL
 
     def __call__(self, method, params):
         # TODO: raising errors from the authenticator function does not propagate correctly yet, enable once it is fixed
         # if method != 'authenticateModuleBinary':
         #     raise NotImplementedError('Authenticator: {} not implemented'.format(method))
-        return self.auth_module(params['BinaryPath'])
+        return {'BinaryValid': self.auth(params['BinaryPath']), 'VendorKey': ''}
 
-    def auth_module(self, path, reason='This module has not been authorized:'):
-        valid = self.ask_trust(path, self.hash_of(path, self.hash_name), 'Module not authenticated', reason)
-        return {'BinaryValid': valid, 'VendorKey': ''}
+    def auth(self, path):
+        if self.wheel_checksums is not None and is_wheel_module(path):
+            return self.auth_wheel_module(path)
+        if not self.auth_other_modules:
+            return True
+        return self.ask_trust(path, hash_of(path, self.hash_name), 'Module not authenticated',
+                              'This module has not been authorized:')
+
+    def auth_wheel_module(self, path):
+        """Checks the module against the wheel RECORD, asks the user if it fails."""
+        entry = self.wheel_checksums.get(os.path.basename(path))
+        if entry is None:
+            reason = ('This module was added to the openDAQ python wheel modules directory '
+                      'and is not part of the original wheel build:')
+            module_hash = hash_of(path, self.hash_name)
+        else:
+            record_hash_name, expected_hash = entry
+            module_hash = hash_of(path, record_hash_name)
+            if module_hash == expected_hash:
+                return True
+            reason = ('This module in the openDAQ python wheel modules directory was modified '
+                      'and does not match the one shipped with the wheel build:')
+            # reuse the RECORD check's hash if it is the allowlist algorithm
+            if record_hash_name != self.hash_name:
+                module_hash = hash_of(path, self.hash_name)
+        return self.ask_trust(path, module_hash, 'Module authentication failed', reason)
 
     def ask_trust(self, path, module_hash, title, reason):
         """Loads the module if its hash is in the allowlist, otherwise asks the user.
@@ -158,59 +187,55 @@ class AppModuleAuthenticator:
         except OSError as e:
             print('Saving the module allowlist failed:', e, file=sys.stderr)
 
-    @classmethod
-    def hash_of(cls, path, hash_name):
-        h = hashlib.new(hash_name)
-        # read in chunks, modules can be large
-        with open(path, 'rb') as f:
-            for chunk in iter(lambda: f.read(1 << 20), b''):
-                h.update(chunk)
-        return h.hexdigest()
-
-
-if wheel_authenticator is not None:
-    # the wheel authenticator comes first: its __call__ tells wheel modules from the others,
-    # and its auth_nonwheel_module loads all modules outside the wheel
-    class WheelModulesAuthenticator(wheel_authenticator.WheelModulesAuthenticator, AppModuleAuthenticator):
-        """Authenticates the wheel modules, asking the user about those that fail; loads all other modules."""
-
-        def __init__(self, parent, context):
-            wheel_authenticator.WheelModulesAuthenticator.__init__(self)
-            AppModuleAuthenticator.__init__(self, parent, context)
-
-        def auth_wheel_module(self, path):
-            """Asks the user whether to load a wheel module that failed authentication."""
-            valid, module_hash = super().check_wheel_module(path)
-            if valid:
-                return {'BinaryValid': True, 'VendorKey': ''}
-            if module_hash is None:
-                reason = ('This module was added to the openDAQ python wheel modules directory '
-                          'and is not part of the original wheel build:')
-            else:
-                reason = ('This module in the openDAQ python wheel modules directory was modified '
-                          'and does not match the one shipped with the wheel build:')
-            # reuse the RECORD check's hash if it is the allowlist algorithm
-            if module_hash is None or module_hash[0] != self.hash_name:
-                module_hash = (self.hash_name, self.hash_of(path, self.hash_name))
-            valid = self.ask_trust(path, module_hash[1], 'Module authentication failed', reason)
-            return {'BinaryValid': valid, 'VendorKey': ''}
-else:
-    WheelModulesAuthenticator = None
-
-
-class AllModulesAuthenticator(WheelModulesAuthenticator or AppModuleAuthenticator):
-    """Also asks the user about modules outside the wheel that are not in the allowlist."""
-
-    def auth_nonwheel_module(self, path):
-        """Called by the wheel authenticator only, without the wheel all modules go through auth_module."""
-        return self.auth_module(path, 'This module is not part of the openDAQ python wheel and has not been authorized:')
-
 
 def create_module_authenticator(mode, parent, context):
     """The authenticator for the mode; None if modules are not authenticated,
     or if there are no wheel modules to authenticate (not running from the wheel)."""
-    if mode == ModuleAuth.NONE or (mode == ModuleAuth.WHEEL and WheelModulesAuthenticator is None):
+    if mode == ModuleAuth.NONE or (mode == ModuleAuth.WHEEL and WHEEL_MODULES_DIR is None):
         return None
-    if mode == ModuleAuth.ALL:
-        return AllModulesAuthenticator(parent, context)
-    return WheelModulesAuthenticator(parent, context)
+    return ModuleAuthenticator(mode, parent, context)
+
+
+def is_wheel_module(path):
+    module_dir = os.path.normcase(os.path.realpath(os.path.dirname(os.path.abspath(path))))
+    try:
+        return os.path.commonpath([WHEEL_MODULES_DIR, module_dir]) == WHEEL_MODULES_DIR
+    except ValueError:  # different drives on Windows
+        return False
+
+
+def hash_of(path, hash_name):
+    h = hashlib.new(hash_name)
+    # read in chunks, modules can be large
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def load_wheel_checksums():
+    """Maps the file names of the wheel modules to (hash algorithm, hex digest), read from the RECORD of the installed wheel.
+    Modules without a usable hash are left out, so they fail authentication."""
+    try:
+        files = importlib.metadata.distribution('opendaq').files
+    except importlib.metadata.PackageNotFoundError:
+        files = None
+    if files is None:
+        raise RuntimeError('No RECORD found for the opendaq distribution, it should be installed from the wheel')
+    checksums = {}
+    for file in files:
+        # skip files of another installation of the package than the one in use
+        if os.path.normcase(os.path.realpath(os.path.dirname(file.locate()))) != WHEEL_MODULES_DIR:
+            continue
+        if file.hash is None:
+            print('No hash for {} in the wheel RECORD'.format(file), file=sys.stderr)
+            continue
+        if file.hash.mode not in hashlib.algorithms_available:
+            print('Unsupported hash algorithm {} for {} in the wheel RECORD'.format(file.hash.mode, file), file=sys.stderr)
+            continue
+        # RECORD stores urlsafe base64 digests without padding
+        digest = base64.urlsafe_b64decode(file.hash.value + '=' * (-len(file.hash.value) % 4))
+        checksums[file.name] = (file.hash.mode, digest.hex())
+    if not checksums:
+        print('The opendaq wheel RECORD lists no modules in {}'.format(WHEEL_MODULES_DIR), file=sys.stderr)
+    return checksums

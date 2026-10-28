@@ -1,5 +1,4 @@
 from .opendaq import *
-from . import authenticator
 import os
 
 OPENDAQ_MODULES_DIR = os.path.dirname(os.path.abspath(__file__))
