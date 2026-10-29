@@ -57,41 +57,37 @@ template <class F>
 daq::ErrCode PyFunctionImpl<F>::call(daq::IBaseObject* params, daq::IBaseObject** result)
 {
     OPENDAQ_PARAM_NOT_NULL(result);
-    PY_ACQUIRE_GIL_OR_RETURN();
-
-    if (params == nullptr)
+    return pyDaqTry([&]()
     {
-        auto r = pyObject();
-        auto obj = pyObjectToBaseObject(r, false);
-        *result = obj.detach();
-    }
-    else
-    {
-        const auto paramsPtr = daq::BaseObjectPtr::Borrow(params);
-        auto list = paramsPtr.asPtrOrNull<daq::IList>(true);
-        if (list.assigned())
+        pybind11::object r;
+        if (params == nullptr)
         {
-            pybind11::tuple args(list.getCount());
-
-            for (size_t i = 0; i < list.getCount(); i++)
-            {
-                args[i] = F::ToPyObject(list[i]);
-            }
-
-            auto r = pyObject(*args);
-            auto obj = pyObjectToBaseObject(r, false);
-            *result = obj.detach();
+            r = pyObject();
         }
         else
         {
-            auto po = F::ToPyObject(params);
-            auto r = pyObject(po);
-            auto obj = pyObjectToBaseObject(r, false);
-            *result = obj.detach();
+            const auto paramsPtr = daq::BaseObjectPtr::Borrow(params);
+            auto list = paramsPtr.asPtrOrNull<daq::IList>(true);
+            if (list.assigned())
+            {
+                pybind11::tuple args(list.getCount());
 
+                for (size_t i = 0; i < list.getCount(); i++)
+                {
+                    args[i] = F::ToPyObject(list[i]);
+                }
+
+                r = pyObject(*args);
+            }
+            else
+            {
+                r = pyObject(F::ToPyObject(params));
+            }
         }
-    }
-    return OPENDAQ_SUCCESS;
+
+        auto obj = pyObjectToBaseObject(r, false);
+        *result = obj.detach();
+    });
 }
 
 template <class F>

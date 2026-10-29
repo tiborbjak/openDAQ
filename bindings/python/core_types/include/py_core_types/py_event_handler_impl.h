@@ -31,8 +31,7 @@ public:
 
     ErrCode INTERFACE_FUNC handleEvent(IBaseObject* sender, IEventArgs* eventArgs) override
     {
-        PY_ACQUIRE_GIL_OR_RETURN();
-        const ErrCode errCode = daqTry([&] { pyObject(baseObjectToPyObject(sender), baseObjectToPyObject(eventArgs)); });
+        const ErrCode errCode = pyDaqTry([&] { pyObject(baseObjectToPyObject(sender), baseObjectToPyObject(eventArgs)); });
         OPENDAQ_RETURN_IF_FAILED(errCode, "Failed to handle event in PyEventHandlerImpl");
         return errCode;
     }

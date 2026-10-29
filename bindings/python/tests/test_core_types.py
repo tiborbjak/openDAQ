@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
+import gc
 import unittest
+import weakref
 import opendaq_test
 import opendaq as daq
 
@@ -451,6 +453,27 @@ class TestProcedure(opendaq_test.TestCase):
 
         self.assertEqual(received, [(f'string {i}', i + 0.5) for i in range(10)])
 
+    def test_raises(self):
+
+        def raise_error(*args):
+            raise ValueError('procedure error')
+        proc = daq.Procedure(raise_error)
+
+        for args in [(), (1,), (1, 2)]:
+            with self.assertRaisesRegex(RuntimeError, 'ValueError: procedure error'):
+                proc(*args)
+
+    def test_to_string_with_failing_repr(self):
+        class Callable:
+            def __call__(self, *args):
+                pass
+
+            def __repr__(self):
+                raise ValueError('repr error')
+
+        # objectToString reports a failing toString as "Unknown"
+        self.assertEqual(str(daq.Procedure(Callable())), 'Unknown')
+
 class TestFunction(opendaq_test.TestCase):
 
     def test_no_params(self):
@@ -496,6 +519,255 @@ class TestFunction(opendaq_test.TestCase):
             func(f'string {i}', i + 0.5)
 
         self.assertEqual(received, [(f'string {i}', i + 0.5) for i in range(10)])
+
+    def test_raises(self):
+
+        def raise_error(*args):
+            raise ValueError('function error')
+        func = daq.Function(raise_error)
+
+        for args in [(), (1,), (1, 2)]:
+            with self.assertRaisesRegex(RuntimeError, 'ValueError: function error'):
+                func(*args)
+
+    def test_to_string_with_failing_repr(self):
+        class Callable:
+            def __call__(self, *args):
+                pass
+
+            def __repr__(self):
+                raise ValueError('repr error')
+
+        # objectToString reports a failing toString as "Unknown"
+        self.assertEqual(str(daq.Function(Callable())), 'Unknown')
+
+class TestEventHandler(opendaq_test.TestCase):
+
+    def test_raises(self):
+        property_object = daq.PropertyObject()
+        property_object.add_property(daq.StringProperty('property1', 'defaultValue', True))
+
+        def handler(sender, args):
+            raise ValueError('handler error')
+
+        property_object.get_on_property_value_write('property1') + daq.EventHandler(handler)
+
+        with self.assertRaisesRegex(RuntimeError, 'ValueError: handler error'):
+            property_object.set_property_value('property1', 'newValue')
+
+
+class TestQueuedEventHandler(opendaq_test.TestCase):
+
+    def make_object(self, *names):
+        property_object = daq.PropertyObject()
+        for name in names:
+            property_object.add_property(daq.StringProperty(name, 'defaultValue', True))
+        return property_object
+
+    def subscribe(self, property_object, name, callback):
+        handler = daq.QueuedEventHandler(callback)
+        property_object.get_on_property_value_write(name) + handler
+        return handler
+
+    def unsubscribe(self, property_object, name, handler):
+        property_object.get_on_property_value_write(name) - handler
+
+    def test_dispatched_once_on_process_events(self):
+        property_object = self.make_object('property1')
+        calls = []
+
+        self.subscribe(property_object, 'property1', lambda sender, args: calls.append(1))
+        property_object.set_property_value('property1', 'newValue')
+        self.assertEqual(calls, [])
+
+        daq.event_queue.process_events()
+        self.assertEqual(calls, [1])
+
+        daq.event_queue.process_events()
+        self.assertEqual(calls, [1])
+
+    def test_handler_receives_sender_and_args(self):
+        property_object = self.make_object('property1')
+        received = []
+
+        def handler(sender, args):
+            property_args = daq.IPropertyValueEventArgs.cast_from(args)
+            received.append((sender.get_property_value('property1'), property_args.value, property_args.property.name))
+
+        self.subscribe(property_object, 'property1', handler)
+        property_object.set_property_value('property1', 'newValue')
+        daq.event_queue.process_events()
+
+        self.assertEqual(received, [('newValue', 'newValue', 'property1')])
+
+    def test_events_dispatched_in_order(self):
+        property_object = self.make_object('property1', 'property2')
+        calls = []
+
+        def handler(tag):
+            def record(sender, args):
+                property_args = daq.IPropertyValueEventArgs.cast_from(args)
+                calls.append((tag, property_args.property.name, property_args.value))
+            return record
+
+        self.subscribe(property_object, 'property1', handler('first'))
+        self.subscribe(property_object, 'property1', handler('second'))
+        self.subscribe(property_object, 'property2', handler('first'))
+        property_object.set_property_value('property1', 'a')
+        property_object.set_property_value('property2', 'b')
+        property_object.set_property_value('property1', 'c')
+        daq.event_queue.process_events()
+
+        self.assertEqual(calls, [
+            ('first', 'property1', 'a'), ('second', 'property1', 'a'),
+            ('first', 'property2', 'b'),
+            ('first', 'property1', 'c'), ('second', 'property1', 'c'),
+        ])
+
+    def test_return_value_ignored_and_released(self):
+        property_object = self.make_object('property1')
+        released = []
+
+        class Result:
+            def __del__(self):
+                released.append(True)
+
+        self.subscribe(property_object, 'property1', lambda sender, args: Result())
+        property_object.set_property_value('property1', 'newValue')
+        daq.event_queue.process_events()
+        gc.collect()
+
+        self.assertEqual(released, [True])
+        self.assertEqual(property_object.get_property_value('property1'), 'newValue')
+
+    def test_clear_discards_queued_events(self):
+        property_object = self.make_object('property1')
+        calls = []
+
+        self.subscribe(property_object, 'property1', lambda sender, args: calls.append(1))
+        property_object.set_property_value('property1', 'newValue')
+        daq.event_queue.clear()
+        daq.event_queue.process_events()
+
+        self.assertEqual(calls, [])
+
+    def test_unsubscribed_handler_not_queued(self):
+        property_object = self.make_object('property1')
+        calls = []
+
+        handler = self.subscribe(property_object, 'property1', lambda sender, args: calls.append(1))
+        self.unsubscribe(property_object, 'property1', handler)
+        property_object.set_property_value('property1', 'newValue')
+        daq.event_queue.process_events()
+
+        self.assertEqual(calls, [])
+
+    def test_queued_event_keeps_handler_alive(self):
+        class Handler:
+            def __init__(self):
+                self.calls = 0
+
+            def __call__(self, sender, args):
+                self.calls += 1
+
+        for process in [True, False]:
+            with self.subTest(process=process):
+                property_object = self.make_object('property1')
+                python_handler = Handler()
+                handler_ref = weakref.ref(python_handler)
+
+                # Subscribe, queue an event, then drop every reference except the queued one
+                handler = self.subscribe(property_object, 'property1', python_handler)
+                property_object.set_property_value('property1', 'newValue')
+                self.unsubscribe(property_object, 'property1', handler)
+                del handler
+                gc.collect()
+                self.assertIsNotNone(handler_ref())
+
+                if process:
+                    daq.event_queue.process_events()
+                    self.assertEqual(handler_ref().calls, 1)
+                else:
+                    daq.event_queue.clear()
+                    self.assertEqual(handler_ref().calls, 0)
+
+                del python_handler
+                gc.collect()
+                self.assertIsNone(handler_ref())
+
+    def test_events_raised_by_handler_run_in_next_process_events(self):
+        property_object = self.make_object('property1', 'property2')
+        calls = []
+
+        def handler1(sender, args):
+            calls.append('property1')
+            sender.set_property_value('property2', 'fromHandler')
+
+        self.subscribe(property_object, 'property1', handler1)
+        self.subscribe(property_object, 'property2', lambda sender, args: calls.append('property2'))
+        property_object.set_property_value('property1', 'newValue')
+
+        daq.event_queue.process_events()
+        self.assertEqual(calls, ['property1'])
+        self.assertEqual(property_object.get_property_value('property2'), 'fromHandler')
+
+        daq.event_queue.process_events()
+        self.assertEqual(calls, ['property1', 'property2'])
+
+    def test_failing_handler(self):
+        property_object = self.make_object('property1', 'property2', 'property3')
+        calls = []
+
+        def failing(sender, args):
+            calls.append('property2')
+            if len(calls) == 2:
+                raise ValueError('handler error')
+
+        self.subscribe(property_object, 'property1', lambda sender, args: calls.append('property1'))
+        self.subscribe(property_object, 'property2', failing)
+        self.subscribe(property_object, 'property3', lambda sender, args: calls.append('property3'))
+        property_object.set_property_value('property1', 'a')
+        property_object.set_property_value('property2', 'b')
+        property_object.set_property_value('property3', 'c')
+
+        with self.assertRaisesRegex(RuntimeError, 'ValueError: handler error'):
+            daq.event_queue.process_events()
+        self.assertEqual(calls, ['property1', 'property2'])
+
+        # The rest of the failed batch is discarded
+        daq.event_queue.process_events()
+        self.assertEqual(calls, ['property1', 'property2'])
+
+        # The queue is still usable
+        property_object.set_property_value('property2', 'd')
+        daq.event_queue.process_events()
+        self.assertEqual(calls, ['property1', 'property2', 'property2'])
+
+    def test_handler_with_wrong_signature_raises_runtime_error(self):
+        property_object = self.make_object('property1')
+
+        self.subscribe(property_object, 'property1', lambda: None)
+        property_object.set_property_value('property1', 'newValue')
+
+        with self.assertRaisesRegex(RuntimeError, 'TypeError'):
+            daq.event_queue.process_events()
+
+    def test_to_string(self):
+        def my_handler(sender, args):
+            pass
+
+        class FailingRepr:
+            def __call__(self, sender, args):
+                pass
+
+            def __repr__(self):
+                raise ValueError('repr error')
+
+        self.assertRegex(str(daq.QueuedEventHandler(my_handler)),
+                         r'^PyQueuedEventHandler<<function .*my_handler at 0x[0-9a-fA-F]+>>\(\d+ references\)$')
+        # objectToString reports a failing toString as "Unknown"
+        self.assertEqual(str(daq.QueuedEventHandler(FailingRepr())), 'Unknown')
+
 
 class TestStruct(opendaq_test.TestCase):
 

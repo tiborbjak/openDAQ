@@ -41,7 +41,7 @@ void PyEventQueue::enqueueEvent(daq::IPythonQueuedEventHandler* eventHandler, da
                         sender = std::move(senderPtr),
                         eventArgs = std::move(eventArgsPtr)] 
     {
-        eventHandler->dispatch(sender, eventArgs);
+        daq::checkErrorInfo(eventHandler->dispatch(sender, eventArgs));
     });
 }
 
@@ -54,6 +54,7 @@ void PyEventQueue::processEvents()
         std::swap(localQueue, callbackQueue);
     }
 
+    // If a handler fails, the exception propagates and the remaining events in localQueue are discarded
     while (!localQueue.empty())
     {
         auto cb = std::move(localQueue.front());

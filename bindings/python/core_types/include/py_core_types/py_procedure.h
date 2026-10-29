@@ -53,12 +53,14 @@ PyProcedureImpl<F>::PyProcedureImpl(pybind11::object&& pyObject)
 template <class F>
 daq::ErrCode PyProcedureImpl<F>::dispatch(daq::IBaseObject* params)
 {
-    PY_ACQUIRE_GIL_OR_RETURN();
-
-    if (params == nullptr)
-        pyObject();
-    else
+    return pyDaqTry([&]()
     {
+        if (params == nullptr)
+        {
+            pyObject();
+            return;
+        }
+
         const auto paramsPtr = daq::BaseObjectPtr::Borrow(params);
         auto list = paramsPtr.asPtrOrNull<daq::IList>(true);
         if (list.assigned())
@@ -70,17 +72,13 @@ daq::ErrCode PyProcedureImpl<F>::dispatch(daq::IBaseObject* params)
                 args[i] = F::ToPyObject(list[i]);
             }
 
-            auto result = PyObject_CallObject(pyObject.ptr(), args.ptr());
-            if (!result)
-                throw pybind11::error_already_set();
+            pyObject(*args);
         }
         else
         {
-            auto po = F::ToPyObject(params);
-            pyObject(po);
+            pyObject(F::ToPyObject(params));
         }
-    }
-    return OPENDAQ_SUCCESS;
+    });
 }
 
 template <class F>

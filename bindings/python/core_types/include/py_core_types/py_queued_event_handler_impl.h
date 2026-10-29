@@ -41,39 +41,33 @@ public:
 template <class F>
 daq::ErrCode PyQueuedEventHandlerImpl<F>::handleEvent(daq::IBaseObject* sender, daq::IEventArgs* eventArgs)
 {
-    auto queueWeak = PyEventQueue::GetWeak();
-    if (auto queue = queueWeak.lock())
-        queue->enqueueEvent(this->borrowInterface<daq::IPythonQueuedEventHandler>(), sender, eventArgs);
-    return OPENDAQ_SUCCESS;
+    return daq::daqTry([&]()
+    {
+        auto queueWeak = PyEventQueue::GetWeak();
+        if (auto queue = queueWeak.lock())
+            queue->enqueueEvent(this->borrowInterface<daq::IPythonQueuedEventHandler>(), sender, eventArgs);
+    });
 }
 
 template <class F>
 daq::ErrCode PyQueuedEventHandlerImpl<F>::dispatch(daq::IBaseObject* sender, daq::IEventArgs* eventArgs)
 {
-    pybind11::gil_scoped_acquire gil;
-    auto senderObj = baseObjectToPyObject(sender);
-    auto eventArgsObj = baseObjectToPyObject(eventArgs);
-    auto args = pybind11::make_tuple(senderObj, eventArgsObj);
-
-    auto result = PyObject_CallObject(pyObject.ptr(), args.ptr());
-    if (!result)
-        throw pybind11::error_already_set();
-
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        pyObject(baseObjectToPyObject(sender), baseObjectToPyObject(eventArgs));
+    });
 }
 
 template <class F>
 daq::ErrCode PyQueuedEventHandlerImpl<F>::toString(daq::CharPtr* str)
 {
     OPENDAQ_PARAM_NOT_NULL(str);
-    PY_ACQUIRE_GIL_OR_RETURN();
-
-    std::ostringstream os;
-    os << "PyQueuedEventHandler<" << std::string(pybind11::repr(pyObject)) << ">(" << this->getReferenceCount() << " references)";   
-    std::string str1 = os.str();
-    *str = new char[str1.size() + 1];
-    std::strcpy(*str, str1.c_str());
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        std::ostringstream os;
+        os << "PyQueuedEventHandler<" << std::string(pybind11::repr(pyObject)) << ">(" << this->getReferenceCount() << " references)";
+        return daqDuplicateCharPtr(os.str().c_str(), str);
+    });
 }
 
 template <class F>

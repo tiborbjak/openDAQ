@@ -21,6 +21,7 @@
 #include <pybind11/pybind11.h>
 
 #include "py_core_types/py_gil.h"
+#include "py_core_types/py_error.h"
 
 DECLARE_OPENDAQ_INTERFACE(IPyObject, daq::IBaseObject)
 {
@@ -84,11 +85,11 @@ template <class PyT, class... Interfaces>
 inline daq::ErrCode PyObjectImpl<PyT, Interfaces...>::toString(daq::CharPtr* str)
 {
     OPENDAQ_PARAM_NOT_NULL(str);
-    PY_ACQUIRE_GIL_OR_RETURN();
-
-    std::string str1 = pybind11::repr(pyObject);
-    const daq::ErrCode err = daqDuplicateCharPtr(str1.c_str(), str);
-    return err;
+    return pyDaqTry([&]()
+    {
+        std::string str1 = pybind11::repr(pyObject);
+        return daqDuplicateCharPtr(str1.c_str(), str);
+    });
 }
 
 template <class T>

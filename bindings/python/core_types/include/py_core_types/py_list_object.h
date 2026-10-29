@@ -88,16 +88,19 @@ daq::ErrCode PyListImpl<F>::getItemAt(daq::SizeT index, daq::IBaseObject** item)
 {
     OPENDAQ_PARAM_NOT_NULL(item);
 
-    if (index >= pyObject.size())
-        return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_OUTOFRANGE);
+    return pyDaqTry([&]() -> daq::ErrCode
+    {
+        if (index >= pyObject.size())
+            return DAQ_MAKE_ERROR_INFO(OPENDAQ_ERR_OUTOFRANGE);
 
-    pybind11::object obj = pyObject[index];
+        pybind11::object obj = pyObject[index];
 
-    auto daqObj = F::ToBaseObject(obj);
+        auto daqObj = F::ToBaseObject(obj);
 
-    *item = daqObj.detach();
+        *item = daqObj.detach();
 
-    return OPENDAQ_SUCCESS;
+        return OPENDAQ_SUCCESS;
+    });
 }
 
 template <class F>
@@ -105,32 +108,40 @@ daq::ErrCode PyListImpl<F>::getCount(daq::SizeT* size)
 {
     OPENDAQ_PARAM_NOT_NULL(size);
 
-    *size = pyObject.size();
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        *size = pyObject.size();
+    });
 }
 
 template <class F>
 daq::ErrCode PyListImpl<F>::setItemAt(daq::SizeT index, daq::IBaseObject* obj)
 {
-    auto po = F::ToPyObject(obj);
-    pyObject[index] = po;
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        auto po = F::ToPyObject(obj);
+        pyObject[index] = po;
+    });
 }
 
 template <class F>
 daq::ErrCode PyListImpl<F>::pushBack(daq::IBaseObject* obj)
 {
-    auto po = F::ToPyObject(obj);
-    pyObject.append(std::move(po));
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        auto po = F::ToPyObject(obj);
+        pyObject.append(std::move(po));
+    });
 }
 
 template <class F>
 inline daq::ErrCode PyListImpl<F>::pushFront(daq::IBaseObject* obj)
 {
-    auto po = F::ToPyObject(obj);
-    pyObject.insert(0, std::move(po));
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        auto po = F::ToPyObject(obj);
+        pyObject.insert(0, std::move(po));
+    });
 }
 
 template <class F>
@@ -150,13 +161,14 @@ daq::ErrCode PyListImpl<F>::popBack(daq::IBaseObject** obj)
 {
     OPENDAQ_PARAM_NOT_NULL(obj);
 
-    pybind11::object pyobj = pyObject[pyObject.size() - 1];
+    return pyDaqTry([&]()
+    {
+        pybind11::object pyobj = pyObject[pyObject.size() - 1];
 
-    auto daqObj = F::ToBaseObject(pyobj);
+        auto daqObj = F::ToBaseObject(pyobj);
 
-    *obj = daqObj.detach();
-
-    return OPENDAQ_SUCCESS;
+        *obj = daqObj.detach();
+    });
 }
 
 template <class F>
@@ -164,48 +176,57 @@ daq::ErrCode PyListImpl<F>::popFront(daq::IBaseObject** obj)
 {
     OPENDAQ_PARAM_NOT_NULL(obj);
 
-    pybind11::object pyobj = pyObject[0];
+    return pyDaqTry([&]()
+    {
+        pybind11::object pyobj = pyObject[0];
 
-    auto daqObj = F::ToBaseObject(pyobj);
+        auto daqObj = F::ToBaseObject(pyobj);
 
-    *obj = daqObj.detach();
-
-    return OPENDAQ_SUCCESS;
+        *obj = daqObj.detach();
+    });
 }
 
 template <class F>
 daq::ErrCode PyListImpl<F>::insertAt(daq::SizeT index, daq::IBaseObject* obj)
 {
-    auto po = F::ToPyObject(obj);
-    pyObject.insert(index, std::move(po));
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        auto po = F::ToPyObject(obj);
+        pyObject.insert(index, std::move(po));
+    });
 }
 
 template <class F>
 daq::ErrCode PyListImpl<F>::removeAt(daq::SizeT index, daq::IBaseObject** obj)
 {
-    pybind11::object po = pyObject.attr("pop")(index);
-    auto daqObj = F::ToBaseObject(po);
+    return pyDaqTry([&]()
+    {
+        pybind11::object po = pyObject.attr("pop")(index);
+        auto daqObj = F::ToBaseObject(po);
 
-    *obj = daqObj.detach();
-    return OPENDAQ_SUCCESS;
+        *obj = daqObj.detach();
+    });
 }
 
 template <class F>
 daq::ErrCode PyListImpl<F>::deleteAt(daq::SizeT index)
 {
-    pyObject.attr("pop")(index);
-    return OPENDAQ_SUCCESS;
+    return pyDaqTry([&]()
+    {
+        pyObject.attr("pop")(index);
+    });
 }
 
 template <class F>
 daq::ErrCode PyListImpl<F>::clear()
 {
-    auto size = pyObject.size();
+    return pyDaqTry([&]()
+    {
+        auto size = pyObject.size();
 
-    PyObject* po = pyObject.ptr();
-    PySequence_DelSlice(po, 0, size - 1);
-    return OPENDAQ_SUCCESS;
+        PyObject* po = pyObject.ptr();
+        PySequence_DelSlice(po, 0, size - 1);
+    });
 }
 
 template <class F>
