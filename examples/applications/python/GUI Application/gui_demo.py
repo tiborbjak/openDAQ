@@ -874,6 +874,9 @@ class App(tk.Tk):
             self.context.instance.module_manager.load_module(file_path)
             self.tree_update()
         except Exception as e:
+            # TODO: update this when openDAQ error propagation is implemented
+            if 'authentication failed' in str(e):
+                return
             print('Load module failed:', e, file=sys.stderr)
             utils.show_error('Load module failed', str(e), self)
 
