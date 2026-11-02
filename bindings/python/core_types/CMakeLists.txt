@@ -25,6 +25,7 @@ set(SRC_Cpp
     #
     src/py_base_object.cpp
     src/py_gil.cpp
+    src/py_error.cpp
     src/py_integer.cpp
     src/py_float.cpp
     src/py_boolean.cpp

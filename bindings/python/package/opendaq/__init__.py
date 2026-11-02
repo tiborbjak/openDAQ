@@ -1,5 +1,9 @@
 from .opendaq import *
+from .opendaq import errors
 import os
+import sys
+
+sys.modules[__name__ + ".errors"] = errors
 
 OPENDAQ_MODULES_DIR = os.path.dirname(os.path.abspath(__file__))
 OPENDAQ_CWD = os.getcwd()
