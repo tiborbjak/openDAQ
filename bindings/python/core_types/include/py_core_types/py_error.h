@@ -19,6 +19,8 @@
 #include <coretypes/ctutils.h>
 #include <coretypes/exceptions.h>
 
+#include <pybind11/pybind11.h>
+
 #include "py_core_types/py_gil.h"
 
 #include <utility>
@@ -39,3 +41,5 @@ daq::ErrCode pyDaqTry(F&& func)
 {
     return pyDaqTry(nullptr, std::forward<F>(func));
 }
+
+void registerDaqErrors(pybind11::module_ m);

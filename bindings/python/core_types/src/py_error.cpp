@@ -18,6 +18,8 @@
 
 #include <cstdint>
 
+#include <pybind11/eval.h>
+
 #include <coretypes/errors.h>
 #include <coreobjects/errors.h>
 #include <opendaq/errors.h>
@@ -172,4 +174,106 @@ constexpr DaqErrorCodeInfo errorCodes[] = {
 
 #undef DAQ_PY_ERROR
 
+}
+
+void registerDaqErrors(pybind11::module_ m)
+{
+    auto errors = m.def_submodule("errors");
+
+    pybind11::module_::import("sys").attr("modules")[errors.attr("__name__")] = errors;
+
+    pybind11::exec(R"py(
+import operator as _operator
+
+_by_code = {}
+_by_type = {}
+_categories = set()
+
+def _describe(code):
+    return f"{code.name} ({code:#010x})" if isinstance(code, ErrorCode) else f"{code:#010x}"
+
+def _check_code(code):
+    try:
+        code = _operator.index(code)
+    except TypeError:
+        raise TypeError(f"code must be an int, not {type(code).__name__}") from None
+    if not 0x80000000 <= code <= 0xFFFFFFFF:
+        raise ValueError(f"{code:#x} is not an openDAQ error code")
+    try:
+        return ErrorCode(code)
+    except ValueError:
+        return code
+
+def _lookup(code):
+    cls = _by_code.get(code)
+    if cls is None:
+        cls = _by_type.get((code >> 16) & 0xFF, DaqError)
+    return cls
+
+class DaqError(RuntimeError):
+    """Base class for openDAQ errors. `code` holds the openDAQ error code."""
+
+    __module__ = "opendaq.errors"
+    code = None
+
+    def __new__(cls, message="", code=None):
+        if code is None:
+            if cls in _categories:
+                raise TypeError(f"{cls.__name__}() requires a code")
+            self = super().__new__(cls, message)
+            self.code = cls.code
+            return self
+        if cls not in _categories:
+            raise TypeError(f"{cls.__name__}() does not take a code")
+        code = _check_code(code)
+        target = _lookup(code)
+        if not issubclass(target, cls):
+            raise ValueError(f"{_describe(code)} is not a {cls.__name__} code")
+        self = super().__new__(target, message)
+        self.code = code
+        return self
+
+    def __init__(self, message="", code=None):
+        super().__init__(message)
+)py", errors.attr("__dict__"));
+
+    pybind11::list members;
+    for (const auto& info : errorCodes)
+        members.append(pybind11::make_tuple(info.macro + sizeof("OPENDAQ_ERR_") - 1, pybind11::int_(info.code)));
+    pybind11::object errorCode = pybind11::module_::import("enum").attr("IntEnum")(
+        "ErrorCode", members, pybind11::arg("module") = "opendaq.errors");
+    errors.attr("ErrorCode") = errorCode;
+
+    pybind11::object daqError = errors.attr("DaqError");
+
+    auto type = pybind11::module_::import("builtins").attr("type");
+    pybind11::dict byType = errors.attr("_by_type");
+    pybind11::set categories = errors.attr("_categories");
+    categories.add(daqError);
+    for (const auto& category : errorCategories)
+    {
+        pybind11::dict ns;
+        ns["__module__"] = "opendaq.errors";
+        ns["__doc__"] = category.doc;
+        pybind11::object cls = type(category.name, pybind11::make_tuple(daqError), ns);
+        errors.attr(category.name) = cls;
+        byType[pybind11::int_(category.type)] = cls;
+        categories.add(cls);
+    }
+
+    pybind11::dict byCode = errors.attr("_by_code");
+    for (const auto& info : errorCodes)
+    {
+        const uint32_t typeBits = (info.code >> 16) & 0xFF;
+        pybind11::dict ns;
+        ns["__module__"] = "opendaq.errors";
+        ns["__doc__"] = info.doc;
+        ns["code"] = errorCode(info.code);
+        pybind11::object parent = byType.attr("get")(pybind11::int_(typeBits), daqError);
+        pybind11::object cls = type(info.name, pybind11::make_tuple(parent), ns);
+        errors.attr(info.name) = cls;
+        byCode[pybind11::int_(info.code)] = cls;
+    }
+
+    m.attr("DaqError") = daqError;
 }
