@@ -2,6 +2,7 @@
 
 #include "py_core_objects/py_core_objects.h"
 #include "py_core_types/py_core_types.h"
+#include "py_core_types/py_error.h"
 #include "py_opendaq/py_opendaq.h"
 #include "py_opendaq/py_packet_buffer.h"
 #include "py_core_types/py_event_queue.h"
@@ -14,6 +15,7 @@ PYBIND11_MODULE(opendaq, m)
     opendaq_daq_module = m;
     python_class_fraction = py::module_::import("fractions").attr("Fraction");
     pyFinalization().registerAtExit();
+    registerDaqErrors(m);
 
     m.def("get_tracked_object_count", &daqGetTrackedObjectCount);
     m.def("print_tracked_objects", &daqPrintTrackedObjects);
