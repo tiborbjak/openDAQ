@@ -333,7 +333,9 @@ inline BaseObjectPtr ConfigServerDevice::getDefaultAddDeviceConfig(const RpcCont
                                                                    const ParamsDictPtr& params)
 {
     ConfigServerAccessControl::protectObject(device, context.user, Permission::Read);
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     return device.createDefaultAddDeviceConfig();
+    OPENDAQ_SUPPRESS_DEPRECATED_END
 }
 
 }

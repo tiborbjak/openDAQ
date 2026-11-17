@@ -53,14 +53,7 @@ TEST_F(DevicesTest, SettingSyncComponent)
     InstancePtr instance = docs_test_helpers::setupInstance();
     TypeManagerPtr typeManager = instance.getContext().getTypeManager();
     DevicePtr device = instance.getRootDevice();
-#if defined(__GNUC__)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#ifdef _MSC_VER
-    #pragma warning(push)
-    #pragma warning(disable : 4996)
-#endif
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     SyncComponentPtr syncComponent = device.getSyncComponent();
     SyncComponentPrivatePtr syncComponentPrivate = syncComponent.asPtr<ISyncComponentPrivate>(true);
 
@@ -114,12 +107,7 @@ TEST_F(DevicesTest, SettingSyncComponent)
 
     // We can edit the existing PTP interface as well
     newPtpSyncInterface.setPropertyValue("Mode", 3); // set the mode to `Input`
-#ifdef _MSC_VER
-    #pragma warning(pop)
-#endif
-#if defined(__GNUC__)
-    #pragma GCC diagnostic pop
-#endif
+    OPENDAQ_SUPPRESS_DEPRECATED_END
 }
 
 END_NAMESPACE_OPENDAQ

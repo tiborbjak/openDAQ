@@ -14,7 +14,9 @@ int main(int /*argc*/, const char* /*argv*/[])
     const InstancePtr instance = Instance(MODULE_PATH);
 
     // Set username and password
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     auto config = instance.createDefaultAddDeviceConfig();
+    OPENDAQ_SUPPRESS_DEPRECATED_END
     PropertyObjectPtr generalConfig = config.getPropertyValue("General");
     generalConfig.setPropertyValue("Username", "root");
     generalConfig.setPropertyValue("Password", "root");

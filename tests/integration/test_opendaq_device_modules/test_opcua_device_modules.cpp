@@ -67,7 +67,9 @@ static InstancePtr CreateClientInstance(const InstanceBuilderPtr& builder = test
 
     addOpcuaClientModule(instance);
 
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     auto config = instance.createDefaultAddDeviceConfig();
+    OPENDAQ_SUPPRESS_DEPRECATED_END
     PropertyObjectPtr general = config.getPropertyValue("General");
     general.setPropertyValue("StreamingConnectionHeuristic", 2);
 

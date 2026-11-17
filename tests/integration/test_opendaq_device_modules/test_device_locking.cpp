@@ -60,7 +60,9 @@ public:
             mm.addModule(nativeClientModule);
         }
 
+        OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
         auto config = instance.createDefaultAddDeviceConfig();
+        OPENDAQ_SUPPRESS_DEPRECATED_END
         PropertyObjectPtr generalConfig = config.getPropertyValue("General");
 
         generalConfig.setPropertyValue("Username", username);

@@ -399,14 +399,7 @@ TEST_F(ConfigNestedPropertyObjectTest, TestNestedObjectClientProcedureCall)
 }
 
 // These tests exercise the still-functional but deprecated ISyncComponent/getSyncComponent() API
-#if defined(__GNUC__)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#ifdef _MSC_VER
-    #pragma warning(push)
-    #pragma warning(disable : 4996)
-#endif
+OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
 
 TEST_F(ConfigNestedPropertyObjectTest, TestSyncComponent)
 {
@@ -555,12 +548,7 @@ TEST_F(ConfigNestedPropertyObjectTest, SyncComponentCustomModeOptions)
     ASSERT_EQ(interfaceClockSync.getPropertySelectionValue("Mode"), "Off");
 }
 
-#ifdef _MSC_VER
-    #pragma warning(pop)
-#endif
-#if defined(__GNUC__)
-    #pragma GCC diagnostic pop
-#endif
+OPENDAQ_SUPPRESS_DEPRECATED_END
 
 TEST_F(ConfigNestedPropertyObjectTest, ModifyOnPropertyWrite)
 {

@@ -42,7 +42,9 @@ static InstancePtr CreateClientInstance(const std::string& username, const std::
     auto instance = test_helpers::createInstance("[[none]]");
     addNativeClientModule(instance);
 
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     auto config = instance.createDefaultAddDeviceConfig();
+    OPENDAQ_SUPPRESS_DEPRECATED_END
     PropertyObjectPtr general = config.getPropertyValue("General");
     general.setPropertyValue("Username", username);
     general.setPropertyValue("Password", password);

@@ -286,7 +286,9 @@ void defineIDevice(pybind11::module_ m, PyDaqIntf<daq::IDevice, daq::IFolder> cl
         {
             py::gil_scoped_release release;
             const auto objectPtr = daq::DevicePtr::Borrow(object);
+            OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
             return objectPtr.createDefaultAddDeviceConfig().detach();
+            OPENDAQ_SUPPRESS_DEPRECATED_END
         },
         "Creates config object that can be used when adding a device. Contains Device and Streaming default configuration for all available Device/Streaming types. Also contains general add-device configuration settings.");
     cls.def_property_readonly("sync_component",
@@ -295,21 +297,9 @@ void defineIDevice(pybind11::module_ m, PyDaqIntf<daq::IDevice, daq::IFolder> cl
             py::gil_scoped_release release;
             const auto objectPtr = daq::DevicePtr::Borrow(object);
             // getSyncComponent() is deprecated on the C++ side, but the Python property still needs to forward to it
-#if defined(__GNUC__)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#ifdef _MSC_VER
-    #pragma warning(push)
-    #pragma warning(disable : 4996)
-#endif
+            OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
             return objectPtr.getSyncComponent().detach();
-#ifdef _MSC_VER
-    #pragma warning(pop)
-#endif
-#if defined(__GNUC__)
-    #pragma GCC diagnostic pop
-#endif
+            OPENDAQ_SUPPRESS_DEPRECATED_END
         },
         py::return_value_policy::take_ownership,
         "Gets the sync component of the device.");

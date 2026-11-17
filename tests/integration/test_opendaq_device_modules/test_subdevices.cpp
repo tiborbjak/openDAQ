@@ -40,7 +40,9 @@ public:
                                          ListPtr<IString> prioritizedStreamingProtocols,
                                          const IntegerPtr& heuristicValue)
     {
+        OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
         auto config = instance.createDefaultAddDeviceConfig();
+        OPENDAQ_SUPPRESS_DEPRECATED_END
         PropertyObjectPtr general = config.getPropertyValue("General");
         general.setPropertyValue("PrioritizedStreamingProtocols", prioritizedStreamingProtocols);
         general.setPropertyValue("StreamingConnectionHeuristic", heuristicValue);

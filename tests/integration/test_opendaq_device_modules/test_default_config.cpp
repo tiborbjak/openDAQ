@@ -6,6 +6,8 @@ using ModulesDefaultConfigTest = testing::Test;
 
 using namespace daq;
 
+OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
+
 TEST_F(ModulesDefaultConfigTest, Create)
 {
     const auto instance = test_helpers::createInstance("[[none]]");
@@ -608,3 +610,5 @@ TEST_F(ModulesDefaultConfigTest, SmartConnectWithIpVerLt)
         instance.removeDevice(device);
     }
 }
+
+OPENDAQ_SUPPRESS_DEPRECATED_END

@@ -1283,7 +1283,9 @@ TEST_F(InstanceTest, SaveLoadDeviceConfigOld)
     {
         auto instance = test_helpers::setupInstance();
 
+        OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
         auto deviceConfig = instance.createDefaultAddDeviceConfig();
+        OPENDAQ_SUPPRESS_DEPRECATED_END
         PropertyObjectPtr general = deviceConfig.getPropertyValue("General");
         general.setPropertyValue("StreamingConnectionHeuristic", 2);
 
@@ -1309,7 +1311,9 @@ TEST_F(InstanceTest, SaveLoadDeviceConfig)
     {
         auto instance = test_helpers::setupInstance();
 
+        OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
         auto deviceConfig = instance.createDefaultAddDeviceConfig();
+        OPENDAQ_SUPPRESS_DEPRECATED_END
         PropertyObjectPtr general = deviceConfig.getPropertyValue("General");
         general.setPropertyValue("StreamingConnectionHeuristic", 2);
 

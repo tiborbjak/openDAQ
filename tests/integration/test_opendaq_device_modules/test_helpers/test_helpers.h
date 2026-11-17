@@ -945,7 +945,9 @@ namespace test_helpers
     [[maybe_unused]]
     inline InstancePtr connectInstanceWithClientType(const InstancePtr& clientInstance, const std::string& connectionString, ClientType clientType, bool dropOthers = false)
     {
+        OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
         auto config = clientInstance.createDefaultAddDeviceConfig();
+        OPENDAQ_SUPPRESS_DEPRECATED_END
         PropertyObjectPtr generalConfig = config.getPropertyValue("General");
 
         generalConfig.setPropertyValue("ClientType", (Int) clientType);

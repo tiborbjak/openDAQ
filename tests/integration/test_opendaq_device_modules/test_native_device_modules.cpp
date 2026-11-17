@@ -38,6 +38,8 @@ using NativeDeviceModulesTest = testing::Test;
 
 using namespace daq;
 
+OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
+
 namespace test_native_device_modules
 {
 
@@ -5646,3 +5648,5 @@ TEST_F(NativeDeviceModulesTest, RemoveDeviceWhileItsCoreEventHandlerWaitsForTheD
 }
 }
 // namespace test_native_device_modules
+
+OPENDAQ_SUPPRESS_DEPRECATED_END

@@ -218,7 +218,9 @@ protected:
 
         auto connectionString = std::get<1>(GetParam());
 
+        OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
         auto config = instance.createDefaultAddDeviceConfig();
+        OPENDAQ_SUPPRESS_DEPRECATED_END
         PropertyObjectPtr general = config.getPropertyValue("General");
         general.setPropertyValue("PrioritizedStreamingProtocols", List<IString>(std::get<0>(GetParam())));
 

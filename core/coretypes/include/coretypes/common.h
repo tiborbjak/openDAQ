@@ -109,6 +109,21 @@ END_NAMESPACE_OPENDAQ
     #define DAQ_EMPTY_BASES
 #endif
 
+#if defined(__GNUC__)
+    #define OPENDAQ_SUPPRESS_DEPRECATED_BEGIN \
+        _Pragma("GCC diagnostic push") \
+        _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"")
+    #define OPENDAQ_SUPPRESS_DEPRECATED_END _Pragma("GCC diagnostic pop")
+#elif defined(_MSC_VER)
+    #define OPENDAQ_SUPPRESS_DEPRECATED_BEGIN \
+        __pragma(warning(push)) \
+        __pragma(warning(disable : 4996))
+    #define OPENDAQ_SUPPRESS_DEPRECATED_END __pragma(warning(pop))
+#else
+    #define OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
+    #define OPENDAQ_SUPPRESS_DEPRECATED_END
+#endif
+
 #define EXPORT comment(linker, "/EXPORT:"__FUNCTION__"="__FUNCDNAME__)
 
 #define INTERNAL_FACTORY

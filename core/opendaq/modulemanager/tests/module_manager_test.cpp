@@ -357,7 +357,9 @@ TEST_F(ModuleManagerTest, ScanOnAddConfigProperty)
     auto utils = manager.asPtr<IModuleManagerUtils>();
 
     // the default config follows the option; the property overrides it per call
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     auto config = utils.createDefaultAddDeviceConfig();
+    OPENDAQ_SUPPRESS_DEPRECATED_END
     PropertyObjectPtr general = config.getPropertyValue("General");
     ASSERT_EQ(static_cast<bool>(general.getPropertyValue("ScanOnAdd")), false);
 
@@ -379,7 +381,9 @@ TEST_F(ModuleManagerTest, ScanOnAddDefaultEnabled)
     auto impl = reinterpret_cast<MockModuleInternal*>(module.getObject());
     auto utils = manager.asPtr<IModuleManagerUtils>();
 
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     auto config = utils.createDefaultAddDeviceConfig();
+    OPENDAQ_SUPPRESS_DEPRECATED_END
     PropertyObjectPtr general = config.getPropertyValue("General");
     ASSERT_EQ(static_cast<bool>(general.getPropertyValue("ScanOnAdd")), true);
 

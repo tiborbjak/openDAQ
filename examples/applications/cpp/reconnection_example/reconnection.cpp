@@ -23,7 +23,9 @@ InstancePtr createServerInstance()
 // that can detect connection loss when the device does not gracefully disconnect.
 PropertyObjectPtr createConfigWithMonitoring(const InstancePtr& instance)
 {
+    OPENDAQ_SUPPRESS_DEPRECATED_BEGIN
     auto config = instance.createDefaultAddDeviceConfig();
+    OPENDAQ_SUPPRESS_DEPRECATED_END
     PropertyObjectPtr deviceConfig = config.getPropertyValue("Device");
     PropertyObjectPtr nativeDeviceConfig = deviceConfig.getPropertyValue("OpenDAQNativeConfiguration");
     PropertyObjectPtr transportLayerConfig = nativeDeviceConfig.getPropertyValue("TransportLayerConfig");
