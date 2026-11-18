@@ -78,6 +78,10 @@ A `General.PrimaryAddressType` that is set now only orders the addresses, the pr
 A blank `General.PrimaryAddressType`, the default, now prefers IPv4 on `daq://`, also for an add without a config.
 Before, `daq://` connected to the first address the device lists, which could be IPv6.
 
+### Reachability wins over `General.PrimaryAddressType`
+
+`daq://`, streaming connections and native reconnects try a reachable address of the other type before an unreachable address of the preferred type.
+
 ### An add without a config uses the `MinHops` streaming mode
 
 `addDevice` without a config now streams in `MinHops` mode instead of `MinConnections`, so nested devices connect their own streaming where they can.
